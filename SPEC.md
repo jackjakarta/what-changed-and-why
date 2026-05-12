@@ -84,7 +84,7 @@ Notes from shipping:
 - Exit codes: 0 success, 1 runtime errors (no repo, file not in HEAD), 2 usage errors.
 - `/wcaw` build artifact is gitignored.
 
-### Phase 2 — Tree-sitter symbol resolution in the working tree
+### Phase 2 — Tree-sitter symbol resolution in the working tree ✅ shipped
 
 - Add `go-tree-sitter` and the TypeScript grammar.
 - Given `path:symbol`, parse the current file and locate the symbol's AST node and byte range.
@@ -92,6 +92,16 @@ Notes from shipping:
 - Error clearly when the symbol isn't found, suggesting the closest matches.
 
 **Demo:** add `fixtures/foo.ts` with a few functions; `wcaw fixtures/foo.ts:bar` prints the resolved range.
+
+Notes from shipping:
+- New package `internal/locator` exposes `Symbol`, `Kind` (`KindFunction`, `KindMethod`, `KindArrowConst`), `Locate(source []byte, name string) (Symbol, error)`, and `*NotFoundError` carrying up to 3 Levenshtein-ranked suggestions.
+- Walker is a hand-rolled recursive descent over named children rather than a tree-sitter `Query`: easier to debug and trivially extensible when Phase 3 grows new shapes.
+- `export function …` / `export const …` resolve to the **outer** `export_statement` range (not the inner declaration) — this is what Phase 3 will want to diff against.
+- Symbol ambiguity (same name in two classes, etc.) silently picks the first occurrence in source order. Phase 3 owns proper disambiguation.
+- `cmd/wcaw/main.go` rejects non-`.ts` extensions up front; `.tsx` is deliberately deferred (adds a second grammar import and isn't required by the demo).
+- `internal/history` gained `Resolve(cwd, userPath)` returning a `Resolved` struct plus `WalkResolved(Resolved)`. `Resolve` no longer enforces HEAD membership — the locator runs on the working tree, and `WalkResolved` returns an empty slice for untracked files instead of erroring. Typo detection now happens at `os.ReadFile` time.
+- Build now requires CGO (`smacker/go-tree-sitter` wraps the C tree-sitter library).
+- `fixtures/foo.ts` covers all four supported shapes; tests in `internal/locator/locator_test.go` cover each kind plus the export-range, first-wins, and not-found-suggestion behaviors.
 
 ### Phase 3 — Per-commit symbol tracking (the hard, interesting part)
 

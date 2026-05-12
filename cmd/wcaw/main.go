@@ -1,12 +1,15 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/jackjakarta/what-changed-and-why/internal/history"
+	"github.com/jackjakarta/what-changed-and-why/internal/locator"
 )
 
 const usage = `usage: wcaw <path>:<symbol>
@@ -29,7 +32,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "wcaw: %v\n", err)
 		os.Exit(2)
 	}
-	_ = symbol // symbol resolution arrives in Phase 2
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -37,7 +39,38 @@ func main() {
 		os.Exit(1)
 	}
 
-	commits, err := history.WalkFile(cwd, path)
+	resolved, err := history.Resolve(cwd, path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "wcaw: %v\n", err)
+		os.Exit(1)
+	}
+
+	if ext := strings.ToLower(filepath.Ext(resolved.AbsPath)); ext != ".ts" {
+		fmt.Fprintf(os.Stderr, "wcaw: unsupported file extension %q: only .ts is supported in v1\n", ext)
+		os.Exit(1)
+	}
+
+	source, err := os.ReadFile(resolved.AbsPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "wcaw: read file: %v\n", err)
+		os.Exit(1)
+	}
+
+	sym, err := locator.Locate(source, symbol)
+	if err != nil {
+		var nfe *locator.NotFoundError
+		if errors.As(err, &nfe) {
+			fmt.Fprintf(os.Stderr, "wcaw: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "wcaw: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("resolved %s at %s:%d-%d (bytes %d-%d)\n\n",
+		sym.Name, resolved.RelPath, sym.StartLine, sym.EndLine, sym.StartByte, sym.EndByte)
+
+	commits, err := history.WalkResolved(resolved)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "wcaw: %v\n", err)
 		os.Exit(1)
