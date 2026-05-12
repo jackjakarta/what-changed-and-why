@@ -70,20 +70,42 @@ func main() {
 	fmt.Printf("resolved %s at %s:%d-%d (bytes %d-%d)\n\n",
 		sym.Name, resolved.RelPath, sym.StartLine, sym.EndLine, sym.StartByte, sym.EndByte)
 
-	commits, err := history.WalkResolved(resolved)
+	commits, err := history.Track(resolved, sym)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "wcaw: %v\n", err)
 		os.Exit(1)
 	}
 
 	for _, c := range commits {
-		fmt.Printf("%s\t%s\t%s\t%s\n",
+		fmt.Printf("%s\t%s\t%s\t%s\t%s\n",
 			c.Hash[:7],
 			c.Date.Format("2006-01-02"),
 			c.Author,
+			classificationLabel(c),
 			c.Subject,
 		)
 	}
+}
+
+func classificationLabel(c history.Commit) string {
+	label := c.Class.String()
+	if c.Symbol == nil {
+		return label
+	}
+	switch c.Class {
+	case history.ClassRenamed:
+		if c.Symbol.PrevName != "" {
+			return fmt.Sprintf("%s (from %s)", label, c.Symbol.PrevName)
+		}
+	case history.ClassMovedFrom:
+		if c.Symbol.SourceFile != "" {
+			if c.Symbol.PrevName != "" && c.Symbol.PrevName != c.Symbol.Name {
+				return fmt.Sprintf("%s %s (as %s)", label, c.Symbol.SourceFile, c.Symbol.PrevName)
+			}
+			return fmt.Sprintf("%s %s", label, c.Symbol.SourceFile)
+		}
+	}
+	return label
 }
 
 func splitArg(arg string) (path, symbol string, err error) {

@@ -103,7 +103,7 @@ Notes from shipping:
 - Build now requires CGO (`smacker/go-tree-sitter` wraps the C tree-sitter library).
 - `fixtures/foo.ts` covers all four supported shapes; tests in `internal/locator/locator_test.go` cover each kind plus the export-range, first-wins, and not-found-suggestion behaviors.
 
-### Phase 3 — Per-commit symbol tracking (the hard, interesting part)
+### Phase 3 — Per-commit symbol tracking (the hard, interesting part) ✅ shipped
 
 - For each commit that touched the file, read the file blob at that commit and re-parse it.
 - Match by symbol name first.
@@ -112,6 +112,19 @@ Notes from shipping:
 - Classify each commit as `introduced`, `modified`, `moved-from`, `renamed`, or `unrelated` (file touched but symbol unchanged).
 
 **Demo:** synthetic git history in a test fixture exercising rename + cross-file move; output shows the correct classification per commit.
+
+Notes from shipping:
+- `internal/history` gained `Classification`, `SymbolRef`, `Track(r Resolved, sym locator.Symbol) ([]Commit, error)`. `Commit` grew `Class` + `Symbol *SymbolRef`; `SymbolRef` is nil on `ClassUnrelated` rows. `WalkResolved`/`WalkFile` remain untouched as the unclassified flat walk.
+- `internal/locator` exports two new entries used by `history`: `Enumerate(source) ([]Symbol, error)` (every supported symbol in source order) and `Levenshtein(a, b string) int` (the previously-internal edit-distance, promoted to avoid duplication).
+- `Track` takes the already-located `locator.Symbol` rather than just a name so it cannot disagree with the CLI's "resolved …" header about which first-wins occurrence was picked.
+- Merge commits use **first-parent only** for both the symbol diff and the changed-paths diff. The two must agree, so the implementation looks up `c.Parent(0)` once and reuses it.
+- **Body-comparison rule** (`ClassModified` vs `ClassUnrelated`): per-line trim of trailing whitespace on `source[StartByte:EndByte]`, then trim a single trailing `\n` from the whole slice (tree-sitter ranges include trailing newlines inconsistently between `export`-wrapped and bare shapes). Byte-equal otherwise. Comment-only edits inside the body count as `ClassModified` by design.
+- **Rename gates** (both must pass, plus same `Kind`): name `Levenshtein ≤ longerName/2`, and body `Levenshtein ≤ min(20, max(4, longerLen/8))`. Cap/floor avoids the body-length-proportional pathology at both ends.
+- **Cross-file move** scan: diff `parent.Tree()` vs `commit.Tree()` for changed paths; for each `.ts` path other than the tracked file, parse the parent-side blob and collect candidates (same-name + same-Kind = `exact-name`; same-Kind + body-similar = `shape-only` for rename-during-move). Rank `exact-name` > `shape-only`; among ties, prefer files **deleted at the commit**, then files where the candidate symbol **disappeared** parent→commit. If still tied, classify the commit `ClassIntroduced` and emit `wcaw: ambiguous move at <hash>: candidates …` on stderr — v1 surfaces the ambiguity rather than guessing.
+- Copy-not-move (symbol exists in both old + new locations at the commit) is reported as `ClassMovedFrom` following the old location — accepted v1 limitation, not worth special-casing yet.
+- The walk is implemented as a flip-state loop in `Track`: when `ClassMovedFrom` fires, the tracked `(file, name, kind)` is swapped to the source and `repo.Log` is re-opened from `parent.Hash` backward. No actual recursion.
+- New `internal/history/history_test.go` covers five scenarios on synthetic repos built in `t.TempDir()`: introduce-then-modify lifecycle, touched-but-unrelated, clean rename, rename + body tweak, cross-file move. Helper `commitAll` pins an explicit `Author` signature because go-git's `Worktree.Commit` requires one.
+- Output adds a single classification column; renames append ` (from <PrevName>)` and moves append ` <SourceFile>` (or `<SourceFile> (as <PrevName>)` if renamed-during-move). Phase 6 owns prettifying.
 
 ### Phase 4 — GitHub PR enrichment
 

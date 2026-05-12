@@ -129,6 +129,35 @@ class B {
 	}
 }
 
+func TestEnumerate(t *testing.T) {
+	src := []byte(sample)
+	syms, err := Enumerate(src)
+	if err != nil {
+		t.Fatalf("Enumerate returned error: %v", err)
+	}
+
+	want := []struct {
+		name string
+		kind Kind
+	}{
+		{"bar", KindFunction},
+		{"baz", KindFunction},
+		{"qux", KindArrowConst},
+		{"render", KindMethod},
+	}
+	if len(syms) != len(want) {
+		t.Fatalf("got %d symbols, want %d: %+v", len(syms), len(want), syms)
+	}
+	for i, w := range want {
+		if syms[i].Name != w.name {
+			t.Errorf("syms[%d].Name = %q, want %q", i, syms[i].Name, w.name)
+		}
+		if syms[i].Kind != w.kind {
+			t.Errorf("syms[%d].Kind = %v, want %v", i, syms[i].Kind, w.kind)
+		}
+	}
+}
+
 func TestLocateExportedConstRangeCoversExport(t *testing.T) {
 	src := []byte(`export const greeter = (n: string) => "hi " + n;
 `)

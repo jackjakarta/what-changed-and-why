@@ -58,26 +58,45 @@ func (e *NotFoundError) Error() string {
 }
 
 func Locate(source []byte, name string) (Symbol, error) {
+	matches, err := parseAndCollect(source)
+	if err != nil {
+		return Symbol{}, err
+	}
+	for _, s := range matches {
+		if s.Name == name {
+			return s, nil
+		}
+	}
+	names := make([]string, 0, len(matches))
+	for _, s := range matches {
+		names = append(names, s.Name)
+	}
+	return Symbol{}, &NotFoundError{Name: name, Suggestions: suggest(name, names)}
+}
+
+// Enumerate returns every supported symbol in the source, in source order.
+// When the same name appears more than once (e.g. a method name reused across
+// classes), each occurrence is returned; callers wanting the first-wins
+// behaviour should still use Locate.
+func Enumerate(source []byte) ([]Symbol, error) {
+	return parseAndCollect(source)
+}
+
+func parseAndCollect(source []byte) ([]Symbol, error) {
 	parser := sitter.NewParser()
 	defer parser.Close()
 	parser.SetLanguage(typescript.GetLanguage())
 
 	tree, err := parser.ParseCtx(context.Background(), nil, source)
 	if err != nil {
-		return Symbol{}, fmt.Errorf("parse typescript source: %w", err)
+		return nil, fmt.Errorf("parse typescript source: %w", err)
 	}
 	defer tree.Close()
 
 	var matches []Symbol
 	var names []string
 	collect(tree.RootNode(), source, nil, &matches, &names)
-
-	for _, s := range matches {
-		if s.Name == name {
-			return s, nil
-		}
-	}
-	return Symbol{}, &NotFoundError{Name: name, Suggestions: suggest(name, names)}
+	return matches, nil
 }
 
 func collect(n *sitter.Node, src []byte, outer *sitter.Node, matches *[]Symbol, names *[]string) {
@@ -179,7 +198,7 @@ func suggest(target string, names []string) []string {
 	}
 	var picks []ranked
 	for _, n := range unique {
-		d := levenshtein(target, n)
+		d := Levenshtein(target, n)
 		if d <= threshold {
 			picks = append(picks, ranked{n, d})
 		}
@@ -200,7 +219,10 @@ func suggest(target string, names []string) []string {
 	return out
 }
 
-func levenshtein(a, b string) int {
+// Levenshtein is the standard edit distance between two strings, in runes.
+// Exported so other packages (e.g. internal/history) can reuse it without
+// duplicating the implementation.
+func Levenshtein(a, b string) int {
 	ar, br := []rune(a), []rune(b)
 	if len(ar) == 0 {
 		return len(br)
