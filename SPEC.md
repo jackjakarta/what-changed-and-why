@@ -126,7 +126,7 @@ Notes from shipping:
 - New `internal/history/history_test.go` covers five scenarios on synthetic repos built in `t.TempDir()`: introduce-then-modify lifecycle, touched-but-unrelated, clean rename, rename + body tweak, cross-file move. Helper `commitAll` pins an explicit `Author` signature because go-git's `Worktree.Commit` requires one.
 - Output adds a single classification column; renames append ` (from <PrevName>)` and moves append ` <SourceFile>` (or `<SourceFile> (as <PrevName>)` if renamed-during-move). Phase 6 owns prettifying.
 
-### Phase 4 — GitHub PR enrichment
+### Phase 4 — GitHub PR enrichment ✅ shipped
 
 - `internal/forge.Forge` interface; GitHub implementation behind it.
 - For each commit, resolve the merging PR (commit-to-PR endpoint; fall back to search).
@@ -134,6 +134,33 @@ Notes from shipping:
 - Auth: `GITHUB_TOKEN` env, then `gh auth token` shell-out fallback.
 
 **Demo:** run against a public TS repo; output groups commits under PR titles with authors and issue refs.
+
+Notes from shipping:
+- New package `internal/forge` is split across five files: `forge.go` (types + `Forge` interface + `GroupCommits` orchestrator + `ErrNoGitHubRemote`), `github.go` (`GitHubForge` + `NewGitHubFromRepo` + `PullsForCommit`), `remote.go` (URL parsing + `discoverGitHubRemote`), `issues.go` (regexes + `extractIssueRefs`), `auth.go` (`resolveToken` + `bearerTransport`).
+- **Function renamed to `GroupCommits`** because Go forbids `func Group` colliding with `type Group struct` in the same package. The struct kept the simpler name since it's the noun in the public API (`[]forge.Group`).
+- `PullRef` gained a `Body` field that the plan placed only on `Pull`. Rationale: the primary `ListPullRequestsWithCommit` endpoint already returns full `*github.PullRequest` objects with body inline, so a separate `PullRequests.Get` call would be wasted work. `Pull` is now just `PullRef` + extracted `Issues`. Issue extraction runs on `Title + Body` from the PullRef.
+- **Auth chain** matches the plan: `GITHUB_TOKEN` → `GH_TOKEN` → `gh auth token` → anonymous. Anonymous mode prints a single one-line stderr warning (`wcaw: no GitHub token …; using anonymous API (60 req/hr)`) at forge init time, not per request. The bearer-auth `http.RoundTripper` is hand-rolled to avoid pulling in `golang.org/x/oauth2`.
+- **Remote discovery** tries `origin` then `upstream`. Three URL shapes parse cleanly: `https://github.com/o/r(.git)?`, `ssh://git@github.com/o/r(.git)?`, `git@github.com:o/r(.git)?` (scp-like). Trailing slash and case-insensitive host are tolerated. Anything else returns `ErrNoGitHubRemote`.
+- **Issue regexes** (`internal/forge/issues.go`):
+  - Hash: `(?:^|[^A-Za-z0-9_&#])#(\d+)\b` — leading char class excludes `&` (HTML entities), `#` (markdown headers), and word chars (so `abc#123` doesn't match). RE2 has no lookbehind so the prefix is a non-capturing alternation between start-of-string and the excluded char class.
+  - Jira: `\b([A-Z][A-Z0-9]{1,9})-(\d+)\b` — project key 2–10 chars, first must be a capital letter, rest uppercase alphanumeric.
+  - Both run only on PR `Title` + `Body`, deduped by `Raw` value, first-occurrence order. Number==0 is rejected.
+- **PR tie-break** when one SHA maps to multiple PRs (`chooseRef`): merged PRs preferred over unmerged; among ties, smallest PR number wins (favours the original PR over later cherry-pick/revert PRs).
+- **Search-API fallback** triggers only when the primary endpoint returns an empty list (not on error). Query is `<sha> type:pr is:merged repo:<owner>/<repo>`. Search returns `*Issue` not `*PullRequest`, so `MergeSHA` is dropped on this path and `MergedAt` comes via `PullRequestLinks`.
+- **Degradation rules** in `GroupCommits`: 5 consecutive errors abort the walk; >50% failure rate aborts once at least 5 lookups have been attempted. Individual "no PRs for this commit" is expected and silently bucketed into a `Pull == nil` group. `cmd/wcaw/main.go` catches `GroupCommits` errors and falls back to a single no-PR group containing the unenriched commits, with a one-line stderr warning.
+- `internal/history.Resolved` gained a one-line `Repo() *git.Repository` accessor so `forge.NewGitHubFromRepo` doesn't have to re-open the repo from `RepoRoot`. First time `internal/history` exposes the go-git handle outside the package.
+- `cmd/wcaw/main.go` flow added two helpers: `enrichOrFallback(commits, repo)` runs the forge (or stays flat on any failure), `renderGroups(w, groups)` emits a header per group followed by indented tab-separated commit lines. Output keeps the Phase-3 commit-line shape unchanged; Phase 6 owns the timeline mockup.
+- **Output shape** (example with a single matched PR):
+  ```
+  resolved bar at fixtures/foo.ts:1-3 (bytes 0-32)
+
+  PR #1 "feat: implement v1"  @jackjakarta
+    a709906	2026-05-13	jackjakarta	introduced	feat: phase 2
+  ```
+  When no PR matches: `(no PR)` header followed by the same commit lines.
+- **New deps:** `github.com/google/go-github/v66 v66.0.0` (direct), `github.com/google/go-querystring v1.1.0` (transitive). `go.mod` still doesn't require `golang.org/x/oauth2`.
+- **Tests:** `internal/forge/forge_test.go` covers URL parse (14 cases), issue regex (12 cases), and `GroupCommits` behavior (ordering, no-PR bucketing, dedup, consecutive-error abort, single-error tolerance, tie-break). A live opt-in smoke test lives in `github_live_test.go` behind `//go:build forge_live` and a `GITHUB_TOKEN` env-var check.
+- **Open questions parked for later phases:** squash-vs-merge edge cases never surfaced in the demo (commit-to-PR endpoint handles squashes correctly out of the box); rate-limit strategy on big repos is Phase 7's caching problem, not Phase 4's. The plan's flag for `--no-forge` was deliberately not added — there's no flag scaffolding yet and degradation is automatic.
 
 ### Phase 5 — Ownership and related test changes
 

@@ -77,6 +77,11 @@ type Resolved struct {
 	repo *git.Repository
 }
 
+// Repo returns the underlying go-git repository handle. Exposed so callers
+// such as internal/forge can issue their own queries without re-opening the
+// repo from RepoRoot.
+func (r Resolved) Repo() *git.Repository { return r.repo }
+
 // Resolve turns a user-supplied path into an absolute path, repo root, and
 // repo-relative path. It does not check whether the file is tracked at HEAD;
 // the locator runs on the working tree, and history walks tolerate untracked

@@ -1,13 +1,18 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/go-git/go-git/v5"
+
+	"github.com/jackjakarta/what-changed-and-why/internal/forge"
 	"github.com/jackjakarta/what-changed-and-why/internal/history"
 	"github.com/jackjakarta/what-changed-and-why/internal/locator"
 )
@@ -76,15 +81,70 @@ func main() {
 		os.Exit(1)
 	}
 
-	for _, c := range commits {
-		fmt.Printf("%s\t%s\t%s\t%s\t%s\n",
-			c.Hash[:7],
-			c.Date.Format("2006-01-02"),
-			c.Author,
-			classificationLabel(c),
-			c.Subject,
-		)
+	groups := enrichOrFallback(commits, resolved.Repo())
+	renderGroups(os.Stdout, groups)
+}
+
+// enrichOrFallback tries to enrich the flat commit list with PR metadata via
+// the GitHub forge. Any failure (no remote, init error, mid-walk abort)
+// degrades to a single no-PR group containing all commits, with a one-line
+// stderr warning so the user knows what happened.
+func enrichOrFallback(commits []history.Commit, repo *git.Repository) []forge.Group {
+	flat := []forge.Group{{Pull: nil, Commits: commits}}
+
+	ctx := context.Background()
+	fg, ferr := forge.NewGitHubFromRepo(ctx, repo)
+	switch {
+	case errors.Is(ferr, forge.ErrNoGitHubRemote):
+		fmt.Fprintln(os.Stderr, "wcaw: no github remote; showing unenriched history")
+		return flat
+	case ferr != nil:
+		fmt.Fprintf(os.Stderr, "wcaw: forge init failed: %v; showing unenriched history\n", ferr)
+		return flat
 	}
+
+	gs, gerr := forge.GroupCommits(ctx, fg, commits)
+	if gerr != nil {
+		fmt.Fprintf(os.Stderr, "wcaw: github enrichment aborted: %v; showing unenriched history\n", gerr)
+		return flat
+	}
+	return gs
+}
+
+// renderGroups prints each Group on its own block: a PR header line (or
+// "(no PR)") followed by the existing tab-separated commit lines indented
+// two spaces. Phase 6 will replace this with the polished timeline.
+func renderGroups(w io.Writer, groups []forge.Group) {
+	for _, g := range groups {
+		fmt.Fprintln(w, headerLine(g.Pull))
+		for _, c := range g.Commits {
+			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n",
+				c.Hash[:7],
+				c.Date.Format("2006-01-02"),
+				c.Author,
+				classificationLabel(c),
+				c.Subject,
+			)
+		}
+	}
+}
+
+func headerLine(p *forge.Pull) string {
+	if p == nil {
+		return "(no PR)"
+	}
+	parts := []string{fmt.Sprintf("PR #%d %q", p.Number, p.Title)}
+	if p.Author != "" {
+		parts = append(parts, "@"+p.Author)
+	}
+	if len(p.Issues) > 0 {
+		raws := make([]string, 0, len(p.Issues))
+		for _, ir := range p.Issues {
+			raws = append(raws, ir.Raw)
+		}
+		parts = append(parts, "(issues: "+strings.Join(raws, ", ")+")")
+	}
+	return strings.Join(parts, "  ")
 }
 
 func classificationLabel(c history.Commit) string {
