@@ -192,13 +192,30 @@ Notes from shipping:
   Effective owner: alice (67% of commits, last-touched 2026-04-12)
   ```
 
-### Phase 6 — Output polish
+### Phase 6 — Output polish ✅ shipped
 
 - Human renderer rewritten to match the brainstorm's timeline mockup: PR header line, indented detail lines, summary blocks.
 - `--json` mode with a stable, documented schema (commit + PR + ownership objects).
 - Color via `fatih/color`, automatically disabled when stdout is not a TTY.
 
 **Demo:** side-by-side: piped `wcaw ... --json` parses cleanly with `jq`; bare `wcaw ...` renders a colored timeline.
+
+Notes from shipping:
+- New package `internal/render` with four files: `render.go` (public `Input`, `Human`, `JSON`, `ResetColors`; package-level reversal helper), `human.go` (timeline renderer + color palette), `json.go` (render-only wire types + encoder), `reltime.go` (`Humanize(now, t)` bucketing). Tests live alongside: `human_test.go`, `json_test.go` (golden + round-trip), `reltime_test.go`, plus `testdata/sample.json`.
+- **Output ordering** is reversed inside `render` (history.Track / forge.GroupCommits stay newest-first); both human and JSON emit chronological (oldest-first) groups. JSON also reverses inside each group's `commits` array.
+- **Header line** `<Name> — introduced <ago>, <N> commits across <M> PRs`: `<ago>` is `Humanize` of the **oldest commit's date** (not specifically `ClassIntroduced` — robust to rename/move chains). `<N>` counts touching commits (excludes `ClassUnrelated`/`ClassUnknown`, matching `EffectiveOwner`'s denominator). `<M>` counts groups with `Pull != nil`; when zero but touching > 0, suffix is `(no PRs)` instead of `across 0 PRs`.
+- **Per-PR block** format `  <Mon YYYY>  PR #N "Title"  @author` with `MergedAt` for the date, falling back to the oldest commit when unmerged. Detail bullets use a fixed 12-column hang (`            ─ …`) and are emitted in order: `N lines` (introducing PR only, from `Symbol.EndLine - StartLine + 1`), `N commits` (when >1), `also touched <file>` (from `Symbol.SourceFile` of cross-file moves), `renamed from <PrevName>`, `alongside <test files>`, `linked issue:` / `linked issues:` (singular/plural).
+- **No-PR bucket** renders as a single block `  <Mon YYYY>  (no PR)` followed by the same bullet set. Date prefix is the oldest commit's month/year.
+- **Owner footer** changed from `last-touched YYYY-MM-DD` to `last touched <ago>` and from `% of commits` to `% of changes`, and prefixes `@` on the name — matches the brainstorm mockup. Suppressed entirely when `!HasOwner` (same rule as Phase 5).
+- **`Humanize` buckets:** `<1h "just now"`, `<24h "today"`, `<48h "yesterday"`, `<7d "N days ago"`, `<14d "last week"`, `<60d "N weeks ago"`, `<18mo "N months ago"`, else `"N years ago"` with a `1 year ago` singular case at the 18-month boundary. `month=30d`, `year=365d` — calendar precision isn't worth the complexity at this granularity.
+- **`--json` flag** added via stdlib `flag` (no cobra yet, per SPEC §4). When set: skips the `resolved …` preamble and emits the JSON document as the entire stdout payload; stderr warnings (forge degradation, ambiguous moves, test-file enrichment failures) remain unchanged. Untracked working-tree files still emit a valid document with `groups: []`, `owner: null`, populated `symbol`.
+- **JSON schema v1** is documented in `docs/SCHEMA.md`. `schema_version: 1` first key; render-only struct types live in `internal/render/json.go` so the wire format is decoupled from `history.Commit` / `forge.PullRef`. `Pull.Body` is **omitted** by design (potentially large; consumers can re-fetch from `url`). `pull: null` on the no-PR bucket and `symbol: null` on `ClassUnrelated` commits are explicit (not absent). Times are RFC 3339 via Go's default `time.Time` marshaller.
+- **Color** via pre-bound `fatih/color` `SprintFunc`s (`cPR`, `cAuthor`, `cIssue`, `cDate`, `cSymbol`, `cMuted`). `render.ResetColors(stdoutIsTTY)` sets `color.NoColor = !isTTY || NO_COLOR != ""`. Package init runs the same check against `os.Stdout` as a fallback; the binary calls `ResetColors` explicitly using a `os.ModeCharDevice` check (no `golang.org/x/term` dependency). No `--no-color` flag in Phase 6 — `NO_COLOR=1` and piping cover the cases; the flag is cheap to add if a real need surfaces.
+- **`cmd/wcaw/main.go`** lost `renderGroups`, `renderOwner`, `headerLine`, `classificationLabel`; gained `stdoutIsTTY` + the `--json` dispatch. Down from ~210 to ~170 lines; rendering is now independently testable.
+- **New deps:** `github.com/fatih/color v1.19.0` (direct), `github.com/mattn/go-colorable v0.1.14` + `github.com/mattn/go-isatty v0.0.20` (transitive).
+- **Tests:** `reltime_test.go` is a 15-row table covering every bucket boundary including the `1 year ago` singular. `human_test.go` golden-asserts a rich fixture (introducing PR with `N lines`, PR with `also touched`, PR with `linked issue: SEC-44`, no-PR bucket, owner footer) plus three small cases: empty `Commits`, `!HasOwner`, all-`Pull == nil`. `json_test.go` covers round-trip via `map[string]any`, owner-is-null on `!HasOwner`, and a golden compare against `testdata/sample.json` with an `UPDATE_GOLDEN=1` regeneration path.
+- **`schema_version: 1`** is the stability promise. Additive changes (new optional fields, new enum values) don't bump; removals/renames/reorderings of contract-ordered arrays do.
+- **Open questions parked:** the `Pull.Body` omission could become user-controllable in a later phase if downstream tools complain; for now there's no flag scaffolding to hang it on. A `--no-color` flag is similarly deferred.
 
 ### Phase 7 — Caching
 

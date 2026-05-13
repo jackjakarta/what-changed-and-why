@@ -5,25 +5,27 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 
 	"github.com/jackjakarta/what-changed-and-why/internal/forge"
 	"github.com/jackjakarta/what-changed-and-why/internal/history"
 	"github.com/jackjakarta/what-changed-and-why/internal/locator"
+	"github.com/jackjakarta/what-changed-and-why/internal/render"
 )
 
-const usage = `usage: wcaw <path>:<symbol>
+const usage = `usage: wcaw [--json] <path>:<symbol>
 
 example:
   wcaw src/auth/login.ts:validateToken
 `
 
 func main() {
+	jsonOut := flag.Bool("json", false, "emit JSON instead of human output")
 	flag.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 	flag.Parse()
 
@@ -72,8 +74,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("resolved %s at %s:%d-%d (bytes %d-%d)\n\n",
-		sym.Name, resolved.RelPath, sym.StartLine, sym.EndLine, sym.StartByte, sym.EndByte)
+	render.ResetColors(stdoutIsTTY())
 
 	commits, err := history.Track(resolved, sym)
 	if err != nil {
@@ -83,8 +84,43 @@ func main() {
 
 	groups := enrichOrFallback(commits, resolved.Repo())
 	decorateTestFiles(resolved.Repo(), groups, resolved.RelPath)
-	renderGroups(os.Stdout, groups)
-	renderOwner(os.Stdout, commits)
+
+	owner, hasOwner := history.EffectiveOwner(commits)
+	in := render.Input{
+		Symbol:   sym,
+		Path:     resolved.RelPath,
+		Groups:   groups,
+		Commits:  commits,
+		Owner:    owner,
+		HasOwner: hasOwner,
+		Now:      time.Now(),
+	}
+
+	if *jsonOut {
+		if err := render.JSON(os.Stdout, in); err != nil {
+			fmt.Fprintf(os.Stderr, "wcaw: render: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	fmt.Printf("resolved %s at %s:%d-%d (bytes %d-%d)\n\n",
+		sym.Name, resolved.RelPath, sym.StartLine, sym.EndLine, sym.StartByte, sym.EndByte)
+	if err := render.Human(os.Stdout, in); err != nil {
+		fmt.Fprintf(os.Stderr, "wcaw: render: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// stdoutIsTTY reports whether os.Stdout is attached to a terminal. Uses the
+// character-device bit on the file's Stat() — no extra dependency, and good
+// enough for the color-on/off decision (pipes and redirects both fail it).
+func stdoutIsTTY() bool {
+	fi, err := os.Stdout.Stat()
+	if err != nil || fi == nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
 }
 
 // decorateTestFiles populates Group.TestFiles for each group via
@@ -99,17 +135,6 @@ func decorateTestFiles(repo *git.Repository, groups []forge.Group, trackedRel st
 		}
 		groups[i].TestFiles = tests
 	}
-}
-
-// renderOwner prints the "Effective owner" footer. Suppressed when no commit
-// in the flat list qualifies (e.g. all-ClassUnrelated history).
-func renderOwner(w io.Writer, commits []history.Commit) {
-	owner, ok := history.EffectiveOwner(commits)
-	if !ok {
-		return
-	}
-	fmt.Fprintf(w, "\nEffective owner: %s (%d%% of commits, last-touched %s)\n",
-		owner.Name, owner.Percent(), owner.LastTouched.Format("2006-01-02"))
 }
 
 // enrichOrFallback tries to enrich the flat commit list with PR metadata via
@@ -136,67 +161,6 @@ func enrichOrFallback(commits []history.Commit, repo *git.Repository) []forge.Gr
 		return flat
 	}
 	return gs
-}
-
-// renderGroups prints each Group on its own block: a PR header line (or
-// "(no PR)") followed by the existing tab-separated commit lines indented
-// two spaces, plus a "tests:" footer when the group touched any test files.
-// Phase 6 will replace this with the polished timeline.
-func renderGroups(w io.Writer, groups []forge.Group) {
-	for _, g := range groups {
-		fmt.Fprintln(w, headerLine(g.Pull))
-		for _, c := range g.Commits {
-			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n",
-				c.Hash[:7],
-				c.Date.Format("2006-01-02"),
-				c.Author,
-				classificationLabel(c),
-				c.Subject,
-			)
-		}
-		if len(g.TestFiles) > 0 {
-			fmt.Fprintf(w, "  tests: %s\n", strings.Join(g.TestFiles, ", "))
-		}
-	}
-}
-
-func headerLine(p *forge.Pull) string {
-	if p == nil {
-		return "(no PR)"
-	}
-	parts := []string{fmt.Sprintf("PR #%d %q", p.Number, p.Title)}
-	if p.Author != "" {
-		parts = append(parts, "@"+p.Author)
-	}
-	if len(p.Issues) > 0 {
-		raws := make([]string, 0, len(p.Issues))
-		for _, ir := range p.Issues {
-			raws = append(raws, ir.Raw)
-		}
-		parts = append(parts, "(issues: "+strings.Join(raws, ", ")+")")
-	}
-	return strings.Join(parts, "  ")
-}
-
-func classificationLabel(c history.Commit) string {
-	label := c.Class.String()
-	if c.Symbol == nil {
-		return label
-	}
-	switch c.Class {
-	case history.ClassRenamed:
-		if c.Symbol.PrevName != "" {
-			return fmt.Sprintf("%s (from %s)", label, c.Symbol.PrevName)
-		}
-	case history.ClassMovedFrom:
-		if c.Symbol.SourceFile != "" {
-			if c.Symbol.PrevName != "" && c.Symbol.PrevName != c.Symbol.Name {
-				return fmt.Sprintf("%s %s (as %s)", label, c.Symbol.SourceFile, c.Symbol.PrevName)
-			}
-			return fmt.Sprintf("%s %s", label, c.Symbol.SourceFile)
-		}
-	}
-	return label
 }
 
 func splitArg(arg string) (path, symbol string, err error) {
