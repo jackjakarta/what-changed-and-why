@@ -43,6 +43,7 @@ type jsonSummary struct {
 
 type jsonGroup struct {
 	Pull      *jsonPull    `json:"pull"`
+	Summary   string       `json:"summary"`
 	Commits   []jsonCommit `json:"commits"`
 	TestFiles []string     `json:"test_files"`
 }
@@ -154,7 +155,7 @@ func buildJSONGroup(g forge.Group) jsonGroup {
 	if testFiles == nil {
 		testFiles = []string{}
 	}
-	jg := jsonGroup{Commits: commits, TestFiles: testFiles}
+	jg := jsonGroup{Commits: commits, TestFiles: testFiles, Summary: g.Summary}
 	if g.Pull != nil {
 		jg.Pull = buildJSONPull(*g.Pull)
 	}

@@ -17,6 +17,7 @@ import (
 	"github.com/jackjakarta/what-changed-and-why/internal/history"
 	"github.com/jackjakarta/what-changed-and-why/internal/locator"
 	"github.com/jackjakarta/what-changed-and-why/internal/render"
+	"github.com/jackjakarta/what-changed-and-why/internal/summarize"
 )
 
 const usage = `usage: wcaw [--json] [--no-cache] <path>:<symbol>
@@ -92,8 +93,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	groups := enrichOrFallback(commits, resolved.Repo(), c)
+	groups, repoOwner, repoName := enrichOrFallback(commits, resolved.Repo(), c)
 	decorateTestFiles(resolved.Repo(), groups, resolved.RelPath)
+	decorateSummaries(context.Background(), groups, sym, c, repoOwner, repoName)
 
 	owner, hasOwner := history.EffectiveOwner(commits)
 	in := render.Input{
@@ -153,7 +155,10 @@ func decorateTestFiles(repo *git.Repository, groups []forge.Group, trackedRel st
 // stderr warning so the user knows what happened. When c is non-nil the
 // concrete *GitHubForge is wrapped with a read-through cache before being
 // passed to GroupCommits.
-func enrichOrFallback(commits []history.Commit, repo *git.Repository, c *cache.Cache) []forge.Group {
+//
+// The returned owner/repo strings are non-empty only when forge init
+// succeeded; downstream cache wrappers use them to scope keys per repo.
+func enrichOrFallback(commits []history.Commit, repo *git.Repository, c *cache.Cache) ([]forge.Group, string, string) {
 	flat := []forge.Group{{Pull: nil, Commits: commits}}
 
 	ctx := context.Background()
@@ -161,23 +166,45 @@ func enrichOrFallback(commits []history.Commit, repo *git.Repository, c *cache.C
 	switch {
 	case errors.Is(ferr, forge.ErrNoGitHubRemote):
 		fmt.Fprintln(os.Stderr, "wcaw: no github remote; showing unenriched history")
-		return flat
+		return flat, "", ""
 	case ferr != nil:
 		fmt.Fprintf(os.Stderr, "wcaw: forge init failed: %v; showing unenriched history\n", ferr)
-		return flat
+		return flat, "", ""
 	}
 
+	owner, repoName := fg.Owner(), fg.Repo()
 	var f forge.Forge = fg
 	if c != nil {
-		f = cache.Wrap(fg, c, fg.Owner(), fg.Repo())
+		f = cache.Wrap(fg, c, owner, repoName)
 	}
 
 	gs, gerr := forge.GroupCommits(ctx, f, commits)
 	if gerr != nil {
 		fmt.Fprintf(os.Stderr, "wcaw: github enrichment aborted: %v; showing unenriched history\n", gerr)
-		return flat
+		return flat, owner, repoName
 	}
-	return gs
+	return gs, owner, repoName
+}
+
+// decorateSummaries fills Group.Summary via the LLM when DGPT_API_KEY +
+// DGPT_MODEL are set. When the cache is open and a GitHub owner/repo are
+// known, the summarizer is wrapped with a read-through cache so repeat
+// invocations against the same PR cost zero LLM calls. Missing env vars or
+// repeated upstream failures degrade silently — Summary stays empty and the
+// renderer skips the bullet.
+func decorateSummaries(ctx context.Context, groups []forge.Group, sym locator.Symbol, c *cache.Cache, owner, repo string) {
+	s := summarize.New(
+		os.Getenv("DGPT_MODEL"),
+		os.Getenv("DGPT_API_KEY"),
+		os.Getenv("DGPT_BASE_URL"),
+	)
+	if s == nil {
+		return
+	}
+	if c != nil && owner != "" {
+		s = cache.WrapSummarizer(s, c, owner, repo)
+	}
+	summarize.DecorateGroups(ctx, s, groups, sym)
 }
 
 // openCache resolves the default cache path and opens it, returning nil

@@ -177,6 +177,31 @@ func TestHumanNoOwner(t *testing.T) {
 	}
 }
 
+func TestHumanSummaryBullet(t *testing.T) {
+	in := sampleInput()
+	// Add a summary to PR #142 (the introducing PR — last group in the
+	// newest-first slice). The bullet should appear *above* the "N lines"
+	// bullet that already fires for the introducing group.
+	in.Groups[len(in.Groups)-1].Summary = "tightened JWT expiry tolerance"
+
+	var buf bytes.Buffer
+	if err := Human(&buf, in); err != nil {
+		t.Fatalf("Human: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "tightened JWT expiry tolerance") {
+		t.Fatalf("summary line missing:\n%s", out)
+	}
+	summaryIdx := strings.Index(out, "tightened JWT expiry tolerance")
+	linesIdx := strings.Index(out, "19 lines")
+	if summaryIdx < 0 || linesIdx < 0 {
+		t.Fatalf("could not locate both bullets in:\n%s", out)
+	}
+	if summaryIdx > linesIdx {
+		t.Errorf("summary bullet should appear before the lines bullet; summary@%d lines@%d", summaryIdx, linesIdx)
+	}
+}
+
 func TestHumanAllNoPR(t *testing.T) {
 	in := sampleInput()
 	// Collapse everything into a single no-PR bucket; keep the introducing

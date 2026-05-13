@@ -27,6 +27,7 @@
         "merge_sha": "",
         "issues": []
       },
+      "summary": "",
       "commits": [
         {
           "hash": "4444555",
@@ -64,6 +65,7 @@
           }
         ]
       },
+      "summary": "",
       "commits": [
         {
           "hash": "3333444",
@@ -93,6 +95,7 @@
         "merge_sha": "abcdef0",
         "issues": []
       },
+      "summary": "",
       "commits": [
         {
           "hash": "2222333",
@@ -127,6 +130,7 @@
     },
     {
       "pull": null,
+      "summary": "",
       "commits": [
         {
           "hash": "0000111",

@@ -137,6 +137,10 @@ func groupDate(g forge.Group) string {
 func groupBullets(g forge.Group, isIntroducingGroup bool) []string {
 	var out []string
 
+	if g.Summary != "" {
+		out = append(out, cMuted(g.Summary))
+	}
+
 	if isIntroducingGroup {
 		for _, c := range g.Commits {
 			if c.Class == history.ClassIntroduced && c.Symbol != nil {

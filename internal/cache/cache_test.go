@@ -42,7 +42,7 @@ func TestOpen_BucketsExist(t *testing.T) {
 	defer c.Close()
 
 	if err := c.db.View(func(tx *bolt.Tx) error {
-		for _, b := range [][]byte{metaBucket, astBucket, forgeBucket} {
+		for _, b := range [][]byte{metaBucket, astBucket, forgeBucket, summarizeBucket} {
 			if tx.Bucket(b) == nil {
 				t.Errorf("missing bucket %s", string(b))
 			}

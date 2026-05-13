@@ -24,6 +24,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 
 	"github.com/jackjakarta/what-changed-and-why/internal/locator"
+	"github.com/jackjakarta/what-changed-and-why/internal/summarize"
 )
 
 // schemaVersion is the cache file's own format version. Bump only when the
@@ -37,8 +38,9 @@ var (
 	// astBucket embeds the locator schema version: a locator change that
 	// alters Symbol shapes invalidates AST entries without needing a full
 	// schemaVersion bump.
-	astBucket   = []byte(fmt.Sprintf("ast/v1/loc%d", locator.SchemaVersion))
-	forgeBucket = []byte("forge/v1")
+	astBucket       = []byte(fmt.Sprintf("ast/v1/loc%d", locator.SchemaVersion))
+	forgeBucket     = []byte("forge/v1")
+	summarizeBucket = []byte(fmt.Sprintf("summarize/v1/p%d", summarize.PromptVersion))
 )
 
 // Cache wraps a bbolt database. The zero value is not usable; callers must
@@ -102,6 +104,9 @@ func initBuckets(db *bolt.DB) error {
 			if err := tx.DeleteBucket(forgeBucket); err != nil && !errors.Is(err, bolt.ErrBucketNotFound) {
 				return fmt.Errorf("reset forge bucket: %w", err)
 			}
+			if err := tx.DeleteBucket(summarizeBucket); err != nil && !errors.Is(err, bolt.ErrBucketNotFound) {
+				return fmt.Errorf("reset summarize bucket: %w", err)
+			}
 		}
 		if err := meta.Put([]byte("version"), []byte(schemaVersion)); err != nil {
 			return fmt.Errorf("write version: %w", err)
@@ -112,6 +117,9 @@ func initBuckets(db *bolt.DB) error {
 		}
 		if _, err := tx.CreateBucketIfNotExists(forgeBucket); err != nil {
 			return fmt.Errorf("create forge bucket: %w", err)
+		}
+		if _, err := tx.CreateBucketIfNotExists(summarizeBucket); err != nil {
+			return fmt.Errorf("create summarize bucket: %w", err)
 		}
 		return nil
 	})

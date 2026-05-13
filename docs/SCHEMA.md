@@ -73,6 +73,7 @@ See `internal/render/testdata/sample.json` for a complete example.
 ```json
 {
   "pull":       { ... } | null,
+  "summary":    "tightened JWT expiry tolerance after SEC-44 incident",
   "commits":    [ ... ],
   "test_files": [ "..." ]
 }
@@ -81,6 +82,7 @@ See `internal/render/testdata/sample.json` for a complete example.
 | Field        | Type                  | Notes                                                                                          |
 |--------------|-----------------------|------------------------------------------------------------------------------------------------|
 | `pull`       | object \| null        | `null` for the "no-PR" bucket. See [Pull](#pull).                                              |
+| `summary`    | string                | Optional one-line LLM-generated summary of the PR (or no-PR bucket). `""` when the summariser is disabled, unavailable, or failed. Always present. |
 | `commits`    | array&lt;Commit&gt;   | Commits in this group, **oldest-first** (chronological).                                       |
 | `test_files` | array&lt;string&gt;   | Repo-relative paths of test files touched by any commit in the group. Always present (may be empty). |
 
