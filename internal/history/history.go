@@ -166,9 +166,11 @@ func WalkFile(cwd, userPath string) ([]Commit, error) {
 func findRepoRoot(start string) (string, error) {
 	dir := start
 	info, err := os.Stat(dir)
+
 	if err == nil && !info.IsDir() {
 		dir = filepath.Dir(dir)
 	}
+
 	for {
 		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
 			return dir, nil
