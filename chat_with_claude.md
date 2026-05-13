@@ -18,5 +18,5 @@ validateToken — introduced 14 months ago, 11 commits across 6 PRs
 Effective owner: @maria (62% of changes, last touched 3 weeks ago)
 
 It's git log + tree-sitter + your forge API, stitched together by an AI summarizer that groups commits into "phases" with one-liners. The hard-and-interesting part is function-tracking across moves and renames — git log -L is okay for line ranges but flaky when code moves. Tree-sitter lets you identify the function semantically, then walk back through history matching by AST shape, not line number. That's the part nobody does well.
+
 Go fits perfectly — single binary, libgit2 bindings, tree-sitter has Go bindings, performance matters on big monorepos. Output modes: pretty TUI for humans, --json for piping into other tools (or feeding to Claude). Aggressive caching since old commits don't change.
-V1 scope to ship in a weekend: file-level only, GitHub PR fetching, no function-tracking yet, plain text output. Then add the cool stuff.

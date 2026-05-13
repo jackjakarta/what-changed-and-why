@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "symbol": {
+    "name": "validateToken",
+    "kind": "function",
+    "path": "src/auth/login.ts",
+    "start_line": 14,
+    "end_line": 32,
+    "start_byte": 220,
+    "end_byte": 612
+  },
+  "summary": {
+    "introduced_at": "2024-08-12T10:00:00Z",
+    "touching_commits": 5,
+    "total_commits": 5,
+    "pr_count": 3
+  },
+  "groups": [
+    {
+      "pull": {
+        "number": 142,
+        "title": "Initial JWT validation",
+        "author": "maria",
+        "url": "https://example/pull/142",
+        "merged_at": "2024-08-12T10:00:00Z",
+        "state": "closed",
+        "merge_sha": "",
+        "issues": []
+      },
+      "summary": "",
+      "commits": [
+        {
+          "hash": "4444555",
+          "date": "2024-08-12T10:00:00Z",
+          "author": "maria",
+          "subject": "feat: initial JWT validation",
+          "class": "introduced",
+          "symbol": {
+            "name": "validateToken",
+            "prev_name": "",
+            "source_file": "",
+            "start_line": 14,
+            "end_line": 32
+          }
+        }
+      ],
+      "test_files": [
+        "src/auth/login.test.ts"
+      ]
+    },
+    {
+      "pull": {
+        "number": 189,
+        "title": "Fix clock-skew tolerance",
+        "author": "jonas",
+        "url": "https://example/pull/189",
+        "merged_at": "2024-10-04T09:00:00Z",
+        "state": "closed",
+        "merge_sha": "",
+        "issues": [
+          {
+            "raw": "SEC-44",
+            "project": "SEC",
+            "number": 44
+          }
+        ]
+      },
+      "summary": "",
+      "commits": [
+        {
+          "hash": "3333444",
+          "date": "2024-10-04T09:00:00Z",
+          "author": "jonas",
+          "subject": "fix clock skew",
+          "class": "modified",
+          "symbol": {
+            "name": "validateToken",
+            "prev_name": "",
+            "source_file": "",
+            "start_line": 14,
+            "end_line": 32
+          }
+        }
+      ],
+      "test_files": []
+    },
+    {
+      "pull": {
+        "number": 311,
+        "title": "Refactor for refresh tokens",
+        "author": "maria",
+        "url": "https://example/pull/311",
+        "merged_at": "2025-03-08T14:00:00Z",
+        "state": "closed",
+        "merge_sha": "abcdef0",
+        "issues": []
+      },
+      "summary": "",
+      "commits": [
+        {
+          "hash": "2222333",
+          "date": "2025-03-08T14:00:00Z",
+          "author": "maria",
+          "subject": "moved out of session.ts",
+          "class": "moved-from",
+          "symbol": {
+            "name": "validateToken",
+            "prev_name": "",
+            "source_file": "src/auth/session.ts",
+            "start_line": 14,
+            "end_line": 32
+          }
+        },
+        {
+          "hash": "1111222",
+          "date": "2025-03-09T14:00:00Z",
+          "author": "maria",
+          "subject": "split into refresh path",
+          "class": "modified",
+          "symbol": {
+            "name": "validateToken",
+            "prev_name": "",
+            "source_file": "",
+            "start_line": 14,
+            "end_line": 50
+          }
+        }
+      ],
+      "test_files": []
+    },
+    {
+      "pull": null,
+      "summary": "",
+      "commits": [
+        {
+          "hash": "0000111",
+          "date": "2025-09-01T08:00:00Z",
+          "author": "carla",
+          "subject": "tweak comment",
+          "class": "modified",
+          "symbol": {
+            "name": "validateToken",
+            "prev_name": "",
+            "source_file": "",
+            "start_line": 14,
+            "end_line": 32
+          }
+        }
+      ],
+      "test_files": []
+    }
+  ],
+  "owner": {
+    "name": "maria",
+    "commits": 3,
+    "total": 5,
+    "percent": 60,
+    "last_touched": "2025-03-09T14:00:00Z"
+  }
+}
