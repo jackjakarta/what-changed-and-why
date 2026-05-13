@@ -53,10 +53,12 @@ type IssueRef struct {
 
 // Group bundles one PR (or the no-PR bucket, when Pull == nil) with the
 // commits that mapped to it. Commits stay in the input slice's order
-// (newest-first per history.Track).
+// (newest-first per history.Track). TestFiles is populated by Phase 5's
+// post-grouping decoration; GroupCommits itself leaves it nil.
 type Group struct {
-	Pull    *Pull
-	Commits []history.Commit
+	Pull      *Pull
+	Commits   []history.Commit
+	TestFiles []string
 }
 
 // GroupCommits resolves each commit to a PR via f, picks a winning PR per

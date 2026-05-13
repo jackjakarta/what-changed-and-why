@@ -162,12 +162,35 @@ Notes from shipping:
 - **Tests:** `internal/forge/forge_test.go` covers URL parse (14 cases), issue regex (12 cases), and `GroupCommits` behavior (ordering, no-PR bucketing, dedup, consecutive-error abort, single-error tolerance, tie-break). A live opt-in smoke test lives in `github_live_test.go` behind `//go:build forge_live` and a `GITHUB_TOKEN` env-var check.
 - **Open questions parked for later phases:** squash-vs-merge edge cases never surfaced in the demo (commit-to-PR endpoint handles squashes correctly out of the box); rate-limit strategy on big repos is Phase 7's caching problem, not Phase 4's. The plan's flag for `--no-forge` was deliberately not added — there's no flag scaffolding yet and degradation is automatic.
 
-### Phase 5 — Ownership and related test changes
+### Phase 5 — Ownership and related test changes ✅ shipped
 
 - "Effective owner" = (% of touching commits, last-touched date). Show both.
 - For each PR, list co-modified files matching `*.test.ts`, `*.spec.ts`, `__tests__/**`.
 
 **Demo:** output ends with an "Effective owner" line and each PR notes the test files it touched.
+
+Notes from shipping:
+- New file `internal/history/ownership.go`: `Owner{Name, Commits, Total, LastTouched}` + `EffectiveOwner(commits []Commit) (Owner, bool)` + `Owner.Percent() int`. Counts only commits where `Class` is neither `ClassUnrelated` nor `ClassUnknown`. Tie-break (deterministic): highest commit count → most recent `LastTouched` → lexicographically smallest name. Returns `(_, false)` on empty input or all-unrelated history so the caller suppresses the footer entirely rather than printing "unknown".
+- `Owner.Percent()` rounds to the nearest integer (`(commits*100 + total/2)/total`); zero-`Total` Owners return 0. Phase 6 owns any prettier formatting.
+- New file `internal/history/tests.go`: `CollectTestFiles(repo, commits, exclude) ([]string, error)` returning the deduped, alphabetically sorted union of repo-relative test paths touched across the input commits. Uses `commit.Parent(0)` (first-parent only, same merge rule as Phase 3); root commits enumerate their whole tree via `commit.Tree().Files()` so an "introduced + tests added in the same root commit" lifecycle still surfaces. `exclude` is dropped from the result (typically the tracked file's `RelPath`).
+- `isTestPath(p)` rules: basename ends in `.test.ts` or `.spec.ts` → match; otherwise must end in `.ts` AND have a `__tests__` path segment. `.tsx` is deliberately excluded (Phase 2 deferred the `.tsx` grammar), and so is anything with a non-`.ts` extension inside `__tests__/` (no `.css`, `.json`, etc.).
+- `forge.Group` gained `TestFiles []string` — zero-value safe, populated by the new `cmd/wcaw/main.go` `decorateTestFiles` step, untouched by `GroupCommits`. Adding a slot here (rather than a parallel map) anticipates Phase 6's renderer rewrite.
+- `cmd/wcaw/main.go` orchestration: after `enrichOrFallback`, `decorateTestFiles(repo, groups, resolved.RelPath)` fills `Group.TestFiles`; `renderGroups` emits `  tests: a, b, c` after the commit rows when the slice is non-empty; `renderOwner(commits)` then prints the footer using the **flat** `commits` slice (not per-group) so renames/moves don't fragment the denominator.
+- Test-file enrichment failures are silent-degrade: one stderr warning + empty `TestFiles` for the remaining groups. Ownership computation never touches git tree state, so it can't fail this way.
+- `commitChangedPaths` lives next to `CollectTestFiles` in `internal/history/tests.go` rather than being promoted to a public history-package helper — its only caller is `CollectTestFiles`, and the existing private `changedPaths` it wraps is already used by Phase 3's `scanCrossFileMove`. Added a small `shortHashStr(s string)` because the existing `shortHash` helper takes `plumbing.Hash`, not a string.
+- New tests: `internal/history/ownership_test.go` (9 pure-func cases covering single-author, mixed majority, unrelated-exclusion, both tie-breaks, all-unrelated, empty, last-touched-is-author-not-global-max, percent rounding) and `internal/history/tests_test.go` (5 synthetic-repo cases + 10-row `isTestPath` table). Reuses `commitAll`/`writeFile`/`track` helpers from `history_test.go`; introduces a `tracked()` wrapper that returns both commits and `*Resolved` so test-file collection can re-use the cached `repo` handle.
+- `cmd/wcaw` self-demo (single-commit repo with no tests) now prints `Effective owner: jackjakarta (100% of commits, last-touched 2026-05-13)` as the trailing line; no `tests:` line because no test files matched. Behavior on richer histories is covered by `tests_test.go` rather than a checked-in fixture (the synthetic git repos run in `t.TempDir()`).
+- Output shape after Phase 5 (with both new pieces present):
+  ```
+  resolved validateToken at src/auth/login.ts:14-32 (bytes 220-612)
+
+  PR #142 "harden token validation"  @alice  (issues: #91)
+    3a93a2a	2026-04-12	alice	modified	tighten signature check
+    5689668	2026-04-11	alice	modified	add expiry tolerance
+    tests: src/auth/__tests__/login.ts, src/auth/login.test.ts
+
+  Effective owner: alice (67% of commits, last-touched 2026-04-12)
+  ```
 
 ### Phase 6 — Output polish
 

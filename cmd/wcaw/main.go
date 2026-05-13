@@ -82,7 +82,34 @@ func main() {
 	}
 
 	groups := enrichOrFallback(commits, resolved.Repo())
+	decorateTestFiles(resolved.Repo(), groups, resolved.RelPath)
 	renderGroups(os.Stdout, groups)
+	renderOwner(os.Stdout, commits)
+}
+
+// decorateTestFiles populates Group.TestFiles for each group via
+// history.CollectTestFiles. On failure we degrade silently (empty test lists)
+// with one stderr warning, matching the Phase 4 forge fallback pattern.
+func decorateTestFiles(repo *git.Repository, groups []forge.Group, trackedRel string) {
+	for i := range groups {
+		tests, err := history.CollectTestFiles(repo, groups[i].Commits, trackedRel)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "wcaw: test-file enrichment failed: %v\n", err)
+			return
+		}
+		groups[i].TestFiles = tests
+	}
+}
+
+// renderOwner prints the "Effective owner" footer. Suppressed when no commit
+// in the flat list qualifies (e.g. all-ClassUnrelated history).
+func renderOwner(w io.Writer, commits []history.Commit) {
+	owner, ok := history.EffectiveOwner(commits)
+	if !ok {
+		return
+	}
+	fmt.Fprintf(w, "\nEffective owner: %s (%d%% of commits, last-touched %s)\n",
+		owner.Name, owner.Percent(), owner.LastTouched.Format("2006-01-02"))
 }
 
 // enrichOrFallback tries to enrich the flat commit list with PR metadata via
@@ -113,7 +140,8 @@ func enrichOrFallback(commits []history.Commit, repo *git.Repository) []forge.Gr
 
 // renderGroups prints each Group on its own block: a PR header line (or
 // "(no PR)") followed by the existing tab-separated commit lines indented
-// two spaces. Phase 6 will replace this with the polished timeline.
+// two spaces, plus a "tests:" footer when the group touched any test files.
+// Phase 6 will replace this with the polished timeline.
 func renderGroups(w io.Writer, groups []forge.Group) {
 	for _, g := range groups {
 		fmt.Fprintln(w, headerLine(g.Pull))
@@ -125,6 +153,9 @@ func renderGroups(w io.Writer, groups []forge.Group) {
 				classificationLabel(c),
 				c.Subject,
 			)
+		}
+		if len(g.TestFiles) > 0 {
+			fmt.Fprintf(w, "  tests: %s\n", strings.Join(g.TestFiles, ", "))
 		}
 	}
 }
