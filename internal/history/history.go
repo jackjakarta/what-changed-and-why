@@ -213,6 +213,24 @@ func firstLine(s string) string {
 	return s
 }
 
+// SymbolEnumerator is the cache-aware hook that Track uses for every per-
+// commit AST parse. Implementations key by (commitSHA, filePath); the blob
+// argument is the parser fallback on a cache miss. A nil SymbolEnumerator is
+// safe — Track calls locator.Enumerate directly when the cache is absent.
+type SymbolEnumerator interface {
+	Enumerate(commitSHA, filePath string, blob []byte) ([]locator.Symbol, error)
+}
+
+// enumerate routes a per-commit parse through the cache when one is supplied,
+// otherwise parses directly. Cache errors are the cache layer's problem; if a
+// SymbolEnumerator returns one, we surface it to the caller.
+func enumerate(e SymbolEnumerator, commitSHA, filePath string, blob []byte) ([]locator.Symbol, error) {
+	if e == nil {
+		return locator.Enumerate(blob)
+	}
+	return e.Enumerate(commitSHA, filePath, blob)
+}
+
 // Track walks the history of the given symbol in r, classifying each commit.
 // It follows the symbol through in-file renames (AST-shape match) and cross-
 // file moves (by scanning sibling files in the moving commit and recursing
@@ -221,7 +239,11 @@ func firstLine(s string) string {
 // The starting locator.Symbol is taken (rather than just a name) so we don't
 // re-locate and risk a different first-wins disambiguation than the CLI's
 // "resolved" header reported. Merge commits use first-parent only.
-func Track(r Resolved, sym locator.Symbol) ([]Commit, error) {
+//
+// A nil SymbolEnumerator is fine: every AST parse falls through to
+// locator.Enumerate. A non-nil one (e.g. internal/cache.ASTEnumerator) lets
+// Phase 7's cache short-circuit repeat parses of the same (commit, file).
+func Track(r Resolved, sym locator.Symbol, e SymbolEnumerator) ([]Commit, error) {
 	if r.repo == nil {
 		return nil, errors.New("history.Track: zero Resolved (call Resolve first)")
 	}
@@ -242,7 +264,7 @@ func Track(r Resolved, sym locator.Symbol) ([]Commit, error) {
 	from := plumbing.ZeroHash
 
 	for {
-		flip, terminated, err := trackInFile(repo, file, name, kind, from, &results)
+		flip, terminated, err := trackInFile(repo, file, name, kind, from, e, &results)
 		if err != nil {
 			return nil, err
 		}
@@ -277,6 +299,7 @@ func trackInFile(
 	repo *git.Repository,
 	file, name string, kind locator.Kind,
 	from plumbing.Hash,
+	e SymbolEnumerator,
 	results *[]Commit,
 ) (*flipInstruction, bool, error) {
 	logOpts := &git.LogOptions{FileName: &file}
@@ -306,7 +329,7 @@ func trackInFile(
 			return nil, true, nil
 		}
 
-		childMatches, err := locator.Enumerate(childSrc)
+		childMatches, err := enumerate(e, c.Hash.String(), file, childSrc)
 		if err != nil {
 			return nil, false, fmt.Errorf("parse %s at %s: %w", file, shortHash(c.Hash), err)
 		}
@@ -346,7 +369,7 @@ func trackInFile(
 		var parentSym *locator.Symbol
 		var renameCand *locator.Symbol
 		if parentFound {
-			parentMatches, err := locator.Enumerate(parentSrc)
+			parentMatches, err := enumerate(e, parent.Hash.String(), file, parentSrc)
 			if err != nil {
 				return nil, false, fmt.Errorf("parse %s at %s: %w", file, shortHash(parent.Hash), err)
 			}
@@ -390,7 +413,7 @@ func trackInFile(
 			continue
 		}
 
-		srcPath, srcName, ambiguous, err := scanCrossFileMove(c, parent, file, name, kind, childBody)
+		srcPath, srcName, ambiguous, err := scanCrossFileMove(c, parent, file, name, kind, childBody, e)
 		if err != nil {
 			return nil, false, err
 		}
@@ -439,6 +462,7 @@ func scanCrossFileMove(
 	child, parent *object.Commit,
 	excludeFile, name string, kind locator.Kind,
 	childBody []byte,
+	e SymbolEnumerator,
 ) (string, string, bool, error) {
 	changed, err := changedPaths(parent, child)
 	if err != nil {
@@ -470,7 +494,7 @@ func scanCrossFileMove(
 			continue
 		}
 
-		matches, err := locator.Enumerate(parentBlob)
+		matches, err := enumerate(e, parent.Hash.String(), p, parentBlob)
 		if err != nil {
 			continue
 		}
@@ -482,7 +506,7 @@ func scanCrossFileMove(
 		deletedAtC := !childBlobFound
 		var childMatches []locator.Symbol
 		if !deletedAtC {
-			childMatches, _ = locator.Enumerate(childBlob)
+			childMatches, _ = enumerate(e, child.Hash.String(), p, childBlob)
 		}
 
 		stillIn := func(n string, k locator.Kind) bool {

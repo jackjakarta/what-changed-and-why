@@ -16,6 +16,12 @@ import (
 	"github.com/smacker/go-tree-sitter/typescript/typescript"
 )
 
+// SchemaVersion identifies the extraction logic the locator is currently
+// shipping. Bump this when Kind values, byte-range semantics, or any other
+// observable Symbol field changes; downstream caches (e.g. internal/cache)
+// include it in their key space so older entries are invalidated.
+const SchemaVersion = 1
+
 type Kind int
 
 const (

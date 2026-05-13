@@ -12,13 +12,14 @@ import (
 
 	"github.com/go-git/go-git/v5"
 
+	"github.com/jackjakarta/what-changed-and-why/internal/cache"
 	"github.com/jackjakarta/what-changed-and-why/internal/forge"
 	"github.com/jackjakarta/what-changed-and-why/internal/history"
 	"github.com/jackjakarta/what-changed-and-why/internal/locator"
 	"github.com/jackjakarta/what-changed-and-why/internal/render"
 )
 
-const usage = `usage: wcaw [--json] <path>:<symbol>
+const usage = `usage: wcaw [--json] [--no-cache] <path>:<symbol>
 
 example:
   wcaw src/auth/login.ts:validateToken
@@ -26,6 +27,7 @@ example:
 
 func main() {
 	jsonOut := flag.Bool("json", false, "emit JSON instead of human output")
+	noCache := flag.Bool("no-cache", false, "bypass the local cache for this invocation")
 	flag.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 	flag.Parse()
 
@@ -76,13 +78,21 @@ func main() {
 
 	render.ResetColors(stdoutIsTTY())
 
-	commits, err := history.Track(resolved, sym)
+	c := openCache(*noCache)
+	defer c.Close()
+
+	var enumerator history.SymbolEnumerator
+	if c != nil {
+		enumerator = &cache.ASTEnumerator{C: c, RepoRoot: resolved.RepoRoot}
+	}
+
+	commits, err := history.Track(resolved, sym, enumerator)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "wcaw: %v\n", err)
 		os.Exit(1)
 	}
 
-	groups := enrichOrFallback(commits, resolved.Repo())
+	groups := enrichOrFallback(commits, resolved.Repo(), c)
 	decorateTestFiles(resolved.Repo(), groups, resolved.RelPath)
 
 	owner, hasOwner := history.EffectiveOwner(commits)
@@ -140,8 +150,10 @@ func decorateTestFiles(repo *git.Repository, groups []forge.Group, trackedRel st
 // enrichOrFallback tries to enrich the flat commit list with PR metadata via
 // the GitHub forge. Any failure (no remote, init error, mid-walk abort)
 // degrades to a single no-PR group containing all commits, with a one-line
-// stderr warning so the user knows what happened.
-func enrichOrFallback(commits []history.Commit, repo *git.Repository) []forge.Group {
+// stderr warning so the user knows what happened. When c is non-nil the
+// concrete *GitHubForge is wrapped with a read-through cache before being
+// passed to GroupCommits.
+func enrichOrFallback(commits []history.Commit, repo *git.Repository, c *cache.Cache) []forge.Group {
 	flat := []forge.Group{{Pull: nil, Commits: commits}}
 
 	ctx := context.Background()
@@ -155,12 +167,39 @@ func enrichOrFallback(commits []history.Commit, repo *git.Repository) []forge.Gr
 		return flat
 	}
 
-	gs, gerr := forge.GroupCommits(ctx, fg, commits)
+	var f forge.Forge = fg
+	if c != nil {
+		f = cache.Wrap(fg, c, fg.Owner(), fg.Repo())
+	}
+
+	gs, gerr := forge.GroupCommits(ctx, f, commits)
 	if gerr != nil {
 		fmt.Fprintf(os.Stderr, "wcaw: github enrichment aborted: %v; showing unenriched history\n", gerr)
 		return flat
 	}
 	return gs
+}
+
+// openCache resolves the default cache path and opens it, returning nil
+// (caching disabled) when --no-cache is set or anything goes wrong. The
+// degradation pattern matches enrichOrFallback / decorateTestFiles: one
+// stderr line, continue without the feature. Callers can `defer c.Close()`
+// unconditionally — Close on a nil receiver is a no-op.
+func openCache(disabled bool) *cache.Cache {
+	if disabled {
+		return nil
+	}
+	path, err := cache.DefaultPath()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "wcaw: cache disabled: %v\n", err)
+		return nil
+	}
+	c, err := cache.Open(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "wcaw: cache disabled: %v\n", err)
+		return nil
+	}
+	return c
 }
 
 func splitArg(arg string) (path, symbol string, err error) {

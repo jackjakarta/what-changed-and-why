@@ -81,7 +81,7 @@ func track(t *testing.T, dir, rel, name string) []Commit {
 	if err != nil {
 		t.Fatalf("locate %s: %v", name, err)
 	}
-	commits, err := Track(resolved, sym)
+	commits, err := Track(resolved, sym, nil)
 	if err != nil {
 		t.Fatalf("track: %v", err)
 	}
@@ -208,4 +208,79 @@ func equalClasses(commits []Commit, want []Classification) bool {
 		}
 	}
 	return true
+}
+
+// countingEnumerator wraps locator.Enumerate so a test can assert how many
+// blobs the second Track pass had to re-parse.
+type countingEnumerator struct {
+	cache map[string][]locator.Symbol
+	calls int
+}
+
+func (e *countingEnumerator) Enumerate(commitSHA, filePath string, blob []byte) ([]locator.Symbol, error) {
+	key := commitSHA + "|" + filePath
+	if syms, ok := e.cache[key]; ok {
+		return syms, nil
+	}
+	e.calls++
+	syms, err := locator.Enumerate(blob)
+	if err != nil {
+		return nil, err
+	}
+	if e.cache == nil {
+		e.cache = make(map[string][]locator.Symbol)
+	}
+	e.cache[key] = syms
+	return syms, nil
+}
+
+func TestTrack_SymbolEnumeratorCachesAcrossRuns(t *testing.T) {
+	_, wt, dir := newTestRepo(t)
+
+	writeFile(t, dir, "foo.ts", "function bar() {\n    return 1;\n}\n")
+	commitAll(t, wt, "add bar")
+	writeFile(t, dir, "foo.ts", "function bar() {\n    return 2;\n}\n")
+	commitAll(t, wt, "tweak bar")
+	writeFile(t, dir, "foo.ts", "function bar() {\n    return 3;\n}\n")
+	commitAll(t, wt, "tweak bar again")
+
+	resolved, err := Resolve(dir, "foo.ts")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	src, err := os.ReadFile(resolved.AbsPath)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	sym, err := locator.Locate(src, "bar")
+	if err != nil {
+		t.Fatalf("locate: %v", err)
+	}
+
+	enum := &countingEnumerator{}
+
+	first, err := Track(resolved, sym, enum)
+	if err != nil {
+		t.Fatalf("first track: %v", err)
+	}
+	firstCalls := enum.calls
+	if firstCalls == 0 {
+		t.Fatalf("first run should have parsed at least once, got 0")
+	}
+
+	second, err := Track(resolved, sym, enum)
+	if err != nil {
+		t.Fatalf("second track: %v", err)
+	}
+	if enum.calls != firstCalls {
+		t.Errorf("second run reparsed %d blobs (total calls %d, expected %d)", enum.calls-firstCalls, enum.calls, firstCalls)
+	}
+	if len(first) != len(second) {
+		t.Fatalf("commit count drift: first=%d second=%d", len(first), len(second))
+	}
+	for i := range first {
+		if first[i].Hash != second[i].Hash || first[i].Class != second[i].Class {
+			t.Errorf("row %d drifted: first=%+v second=%+v", i, first[i], second[i])
+		}
+	}
 }

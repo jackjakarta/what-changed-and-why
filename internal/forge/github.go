@@ -38,6 +38,14 @@ func NewGitHubFromRepo(ctx context.Context, repo *git.Repository) (*GitHubForge,
 	return &GitHubForge{client: client, owner: owner, repo: name}, nil
 }
 
+// Owner returns the github.com owner ("login") this forge was bound to. The
+// caching layer reads it to derive a per-repo key namespace without widening
+// the Forge interface.
+func (f *GitHubForge) Owner() string { return f.owner }
+
+// Repo returns the github.com repository name this forge was bound to.
+func (f *GitHubForge) Repo() string { return f.repo }
+
 // PullsForCommit asks GitHub which PRs are associated with the given commit.
 // Primary path is the commit-to-PRs REST endpoint; on an empty primary result,
 // it falls back to the search API restricted to merged PRs. Network/API
