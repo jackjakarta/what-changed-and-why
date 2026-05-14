@@ -20,17 +20,25 @@ import (
 	"github.com/jackjakarta/what-changed-and-why/internal/summarize"
 )
 
-const usage = `usage: wcaw [--json] [--no-cache] <path>:<symbol>
+const usage = `usage: wcaw [--json] [--no-cache] [--version] <path>:<symbol>
 
 example:
   wcaw src/auth/login.ts:validateToken
 `
 
+var version = "dev"
+
 func main() {
 	jsonOut := flag.Bool("json", false, "emit JSON instead of human output")
 	noCache := flag.Bool("no-cache", false, "bypass the local cache for this invocation")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("wcaw %s\n", version)
+		os.Exit(0)
+	}
 
 	if flag.NArg() != 1 {
 		fmt.Fprint(os.Stderr, usage)
