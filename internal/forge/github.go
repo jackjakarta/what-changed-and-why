@@ -19,18 +19,20 @@ type GitHubForge struct {
 }
 
 // NewGitHubFromRepo discovers the github.com remote on repo, resolves a token
-// (env → gh CLI → anonymous), and returns a ready Forge. Returns
-// ErrNoGitHubRemote when neither origin nor upstream points at github.com.
-// Anonymous mode emits a single one-line stderr warning so the rate-limit
-// reality is visible without flooding stderr on every commit lookup.
-func NewGitHubFromRepo(ctx context.Context, repo *git.Repository) (*GitHubForge, error) {
+// (env → config → gh CLI → anonymous), and returns a ready Forge. The
+// configToken arg lets cmd/wcaw supply a token from ~/.config/wcaw/config.json
+// without this package importing the config package. Returns ErrNoGitHubRemote
+// when neither origin nor upstream points at github.com. Anonymous mode emits
+// a single one-line stderr warning so the rate-limit reality is visible
+// without flooding stderr on every commit lookup.
+func NewGitHubFromRepo(ctx context.Context, repo *git.Repository, configToken string) (*GitHubForge, error) {
 	owner, name, err := discoverGitHubRemote(repo)
 	if err != nil {
 		return nil, err
 	}
-	token, source := resolveToken(ctx)
+	token, source := resolveToken(ctx, configToken)
 	if token == "" {
-		fmt.Fprintln(os.Stderr, "wcaw: no GitHub token (GITHUB_TOKEN/GH_TOKEN/gh auth token); using anonymous API (60 req/hr)")
+		fmt.Fprintln(os.Stderr, "wcaw: no GitHub token (GITHUB_TOKEN/GH_TOKEN/config/gh auth token); using anonymous API (60 req/hr)")
 	} else {
 		_ = source
 	}
