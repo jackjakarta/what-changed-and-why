@@ -37,13 +37,16 @@ wcaw [--json] [--no-cache] <path>:<symbol>
 - Exit codes: **0** success, **1** runtime error (no repo, unreadable file, unsupported extension, symbol not found, git/render failure), **2** usage error (missing or malformed `<path>:<symbol>`).
 - Argument parsing splits on the **last** `:` so Windows paths and colons inside symbol names don't break; both halves must be non-empty.
 
-Environment knobs (all optional, all degrade silently if absent):
+Configuration sources (all optional, all degrade silently if absent):
 
-- `GITHUB_TOKEN` / `GH_TOKEN` — auth for PR enrichment; falls back to `gh auth token`, then anonymous (60 req/hr).
-- `DGPT_API_KEY` + `DGPT_MODEL` — enable the LLM summarizer (OpenAI-compatible chat completions). Both must be set; missing either disables summaries.
+- Config file at `$XDG_CONFIG_HOME/wcaw/config.json` (or `~/.config/wcaw/config.json`, including on macOS — matching the `cache.DefaultPath` choice). Schema is `{ "github_token": "...", "dgpt": { "api_key": "...", "model": "...", "base_url": "..." } }`. Loaded once in `main` via `internal/config.Load`; missing file = empty config, malformed JSON = one stderr warning + empty config.
+- `GITHUB_TOKEN` / `GH_TOKEN` — auth for PR enrichment. Resolution order in `internal/forge/auth.go`: `GITHUB_TOKEN` → `GH_TOKEN` → `config.github_token` → `gh auth token` → anonymous (60 req/hr).
+- `DGPT_API_KEY` + `DGPT_MODEL` — enable the LLM summarizer (OpenAI-compatible chat completions). Both must be set (env or config); missing either disables summaries.
 - `DGPT_BASE_URL` — override the LLM endpoint.
-- `XDG_CACHE_HOME` — cache lives at `$XDG_CACHE_HOME/wcaw/cache.db`, falling back to `~/.cache/wcaw/cache.db`.
-- `NO_COLOR` — disables ANSI codes (also auto-disabled when stdout isn't a TTY).
+- `XDG_CACHE_HOME` — cache lives at `$XDG_CACHE_HOME/wcaw/cache.db`, falling back to `~/.cache/wcaw/cache.db`. Env-only (cross-tool XDG standard, not mirrored in config).
+- `NO_COLOR` — disables ANSI codes (also auto-disabled when stdout isn't a TTY). Env-only (cross-tool standard).
+
+Env vars override config: `config.EnvOr(envKey, configFallback)` returns the env value when non-empty, otherwise the configured value. This means `FOO=` (empty) does *not* shadow a configured `foo`.
 
 ## Architecture
 
@@ -70,6 +73,7 @@ Packages:
 - **`internal/render`** — human and JSON renderers. `Input` is the shared payload; `Now` is injected (not `time.Now()`) so reltime golden tests stay deterministic. Both renderers consume the input newest-first and **reverse to chronological order** internally so the timeline reads top-down; owner math runs on the un-reversed slice. `ResetColors(stdoutIsTTY)` is called from `main` so the package doesn't need to know about `os.Stdout`. The JSON schema is versioned (`schema_version: 1`) and documented in `docs/SCHEMA.md`; the golden lives at `internal/render/testdata/sample.json`.
 - **`internal/cache`** — bbolt persistence layer. Caches per-commit AST parses (`ASTEnumerator`, satisfying `history.SymbolEnumerator`), per-commit forge lookups (`Wrap` around a `forge.Forge`), and per-PR LLM summaries (`WrapSummarizer`). **The entire package is opt-in and never alters output**: a nil `*Cache` (or any cache error — read miss, decode failure, lost write race) falls through to the underlying logic. Schema is versioned at three levels: top-level `schemaVersion` in `meta`, per-bucket suffixes embedding `locator.SchemaVersion` and `summarize.PromptVersion` so a locator/prompt change auto-invalidates without a full file reset.
 - **`internal/summarize`** — LLM summarizer. `Summarizer` interface + OpenAI-compatible client in `openai.go`. `GroupBrief` is the structured prompt input; `BuildBrief` packs a `forge.Group` + `locator.Symbol` into one. `PromptVersion` is bumped when `buildPrompt` changes in a cache-incompatible way (read by `internal/cache` to invalidate stale entries).
+- **`internal/config`** — optional JSON config loader. `Load()` reads `$XDG_CONFIG_HOME/wcaw/config.json` (or `~/.config/wcaw/config.json`) into a `Config` struct holding the GitHub token and DGPT credentials. Missing file → empty Config + nil error; malformed JSON → empty Config + error so main can log one stderr line. `EnvOr(envKey, fallback)` is the helper main uses to enforce "env wins over config" while treating empty env values as unset. The package never imports forge or summarize — values are plumbed in by `cmd/wcaw/main.go`.
 
 The interesting architectural pieces:
 

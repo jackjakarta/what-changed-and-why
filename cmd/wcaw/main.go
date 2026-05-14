@@ -13,6 +13,7 @@ import (
 	"github.com/go-git/go-git/v5"
 
 	"github.com/jackjakarta/what-changed-and-why/internal/cache"
+	"github.com/jackjakarta/what-changed-and-why/internal/config"
 	"github.com/jackjakarta/what-changed-and-why/internal/forge"
 	"github.com/jackjakarta/what-changed-and-why/internal/history"
 	"github.com/jackjakarta/what-changed-and-why/internal/locator"
@@ -49,6 +50,11 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "wcaw: %v\n", err)
 		os.Exit(2)
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "wcaw: %v; continuing without config\n", err)
 	}
 
 	cwd, err := os.Getwd()
@@ -101,9 +107,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	groups, repoOwner, repoName := enrichOrFallback(commits, resolved.Repo(), c)
+	groups, repoOwner, repoName := enrichOrFallback(commits, resolved.Repo(), c, cfg.GitHubToken)
 	decorateTestFiles(resolved.Repo(), groups, resolved.RelPath)
-	decorateSummaries(context.Background(), groups, sym, c, repoOwner, repoName)
+	decorateSummaries(context.Background(), groups, sym, c, repoOwner, repoName, cfg.DGPT)
 
 	owner, hasOwner := history.EffectiveOwner(commits)
 	in := render.Input{
@@ -166,11 +172,11 @@ func decorateTestFiles(repo *git.Repository, groups []forge.Group, trackedRel st
 //
 // The returned owner/repo strings are non-empty only when forge init
 // succeeded; downstream cache wrappers use them to scope keys per repo.
-func enrichOrFallback(commits []history.Commit, repo *git.Repository, c *cache.Cache) ([]forge.Group, string, string) {
+func enrichOrFallback(commits []history.Commit, repo *git.Repository, c *cache.Cache, configToken string) ([]forge.Group, string, string) {
 	flat := []forge.Group{{Pull: nil, Commits: commits}}
 
 	ctx := context.Background()
-	fg, ferr := forge.NewGitHubFromRepo(ctx, repo)
+	fg, ferr := forge.NewGitHubFromRepo(ctx, repo, configToken)
 	switch {
 	case errors.Is(ferr, forge.ErrNoGitHubRemote):
 		fmt.Fprintln(os.Stderr, "wcaw: no github remote; showing unenriched history")
@@ -194,17 +200,18 @@ func enrichOrFallback(commits []history.Commit, repo *git.Repository, c *cache.C
 	return gs, owner, repoName
 }
 
-// decorateSummaries fills Group.Summary via the LLM when DGPT_API_KEY +
-// DGPT_MODEL are set. When the cache is open and a GitHub owner/repo are
-// known, the summarizer is wrapped with a read-through cache so repeat
-// invocations against the same PR cost zero LLM calls. Missing env vars or
-// repeated upstream failures degrade silently — Summary stays empty and the
-// renderer skips the bullet.
-func decorateSummaries(ctx context.Context, groups []forge.Group, sym locator.Symbol, c *cache.Cache, owner, repo string) {
+// decorateSummaries fills Group.Summary via the LLM when an API key + model
+// are available — resolved as env-then-config-then-empty, with env always
+// winning over a configured value (see config.EnvOr). When the cache is open
+// and a GitHub owner/repo are known, the summarizer is wrapped with a
+// read-through cache so repeat invocations against the same PR cost zero LLM
+// calls. Missing credentials or repeated upstream failures degrade silently
+// — Summary stays empty and the renderer skips the bullet.
+func decorateSummaries(ctx context.Context, groups []forge.Group, sym locator.Symbol, c *cache.Cache, owner, repo string, dgpt config.DGPTConfig) {
 	s := summarize.New(
-		os.Getenv("DGPT_MODEL"),
-		os.Getenv("DGPT_API_KEY"),
-		os.Getenv("DGPT_BASE_URL"),
+		config.EnvOr("DGPT_MODEL", dgpt.Model),
+		config.EnvOr("DGPT_API_KEY", dgpt.APIKey),
+		config.EnvOr("DGPT_BASE_URL", dgpt.BaseURL),
 	)
 	if s == nil {
 		return

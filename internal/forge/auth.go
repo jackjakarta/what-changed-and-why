@@ -12,14 +12,18 @@ import (
 // Resolution order:
 //  1. GITHUB_TOKEN env var
 //  2. GH_TOKEN env var (used by the gh CLI itself)
-//  3. `gh auth token` shell-out
-//  4. ("", "anonymous") — anonymous GitHub API access (60 req/hr)
-func resolveToken(ctx context.Context) (string, string) {
+//  3. configToken from ~/.config/wcaw/config.json (passed in by main)
+//  4. `gh auth token` shell-out
+//  5. ("", "anonymous") — anonymous GitHub API access (60 req/hr)
+func resolveToken(ctx context.Context, configToken string) (string, string) {
 	if t := strings.TrimSpace(os.Getenv("GITHUB_TOKEN")); t != "" {
 		return t, "GITHUB_TOKEN"
 	}
 	if t := strings.TrimSpace(os.Getenv("GH_TOKEN")); t != "" {
 		return t, "GH_TOKEN"
+	}
+	if t := strings.TrimSpace(configToken); t != "" {
+		return t, "config"
 	}
 	cmd := exec.CommandContext(ctx, "gh", "auth", "token")
 	out, err := cmd.Output()

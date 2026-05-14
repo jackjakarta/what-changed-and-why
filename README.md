@@ -51,11 +51,30 @@ Must be run inside a git repository. `<path>` is resolved relative to the cwd.
 
 ## Configuration
 
+wcaw reads optional settings from a JSON file at `$XDG_CONFIG_HOME/wcaw/config.json` (or `~/.config/wcaw/config.json` if `XDG_CONFIG_HOME` is unset, including on macOS). Every field is optional and the file may be omitted entirely.
+
+```json
+{
+  "github_token": "ghp_...",
+  "dgpt": {
+    "api_key": "sk-...",
+    "model": "gpt-4o-mini",
+    "base_url": "https://api.openai.com/v1"
+  }
+}
+```
+
+The file may contain secrets — `chmod 600 ~/.config/wcaw/config.json` is recommended.
+
+Environment variables override the config file (env wins when set to a non-empty value):
+
 | Env var                       | Purpose                                                                                  |
 |-------------------------------|------------------------------------------------------------------------------------------|
-| `GITHUB_TOKEN` / `GH_TOKEN`   | GitHub auth for PR enrichment. Falls back to `gh auth token`. Without any token, the GitHub API is anonymous (60 req/hr). |
-| `DGPT_API_KEY`, `DGPT_MODEL`  | Optional LLM summarizer (OpenAI-compatible chat completions). Both required to enable.   |
-| `DGPT_BASE_URL`               | Optional override for the LLM endpoint.                                                  |
+| `GITHUB_TOKEN` / `GH_TOKEN`   | GitHub auth for PR enrichment. Order: `GITHUB_TOKEN` → `GH_TOKEN` → `config.github_token` → `gh auth token`. Without any token, the GitHub API is anonymous (60 req/hr). |
+| `DGPT_API_KEY`, `DGPT_MODEL`  | Optional LLM summarizer (OpenAI-compatible chat completions). Both required to enable. Override `config.dgpt.api_key` / `config.dgpt.model`. |
+| `DGPT_BASE_URL`               | Optional override for the LLM endpoint. Overrides `config.dgpt.base_url`.                |
+| `XDG_CACHE_HOME`              | Standard XDG var; cache path base (see below).                                           |
+| `NO_COLOR`                    | Standard cross-tool var; disables ANSI colors when set to any non-empty value.           |
 
 The cache lives at `$XDG_CACHE_HOME/wcaw/cache.db` (or `~/.cache/wcaw/cache.db`) and is opened transparently. Forge and LLM failures degrade silently with a single stderr line.
 

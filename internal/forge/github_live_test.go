@@ -23,7 +23,7 @@ func TestGitHubForge_PullsForCommit_Live(t *testing.T) {
 		t.Skip("set GITHUB_TOKEN to run the live forge smoke test")
 	}
 	ctx := context.Background()
-	token, _ := resolveToken(ctx)
+	token, _ := resolveToken(ctx, "")
 	f := &GitHubForge{
 		client: github.NewClient(newAuthedHTTPClient(token)),
 		owner:  "microsoft",
