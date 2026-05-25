@@ -67,7 +67,7 @@ wcaw reads optional settings from a JSON file at `$XDG_CONFIG_HOME/wcaw/config.j
 ```json
 {
   "github_token": "ghp_...",
-  "dgpt": {
+  "openai": {
     "api_key": "sk-...",
     "model": "gpt-4o-mini",
     "base_url": "https://api.openai.com/v1"
@@ -82,8 +82,8 @@ Environment variables override the config file (env wins when set to a non-empty
 | Env var                       | Purpose                                                                                  |
 |-------------------------------|------------------------------------------------------------------------------------------|
 | `GITHUB_TOKEN` / `GH_TOKEN`   | GitHub auth for PR enrichment. Order: `GITHUB_TOKEN` → `GH_TOKEN` → `config.github_token` → `gh auth token`. Without any token, the GitHub API is anonymous (60 req/hr). |
-| `DGPT_API_KEY`, `DGPT_MODEL`  | Optional LLM summarizer (OpenAI-compatible chat completions). Both required to enable. Override `config.dgpt.api_key` / `config.dgpt.model`. |
-| `DGPT_BASE_URL`               | Optional override for the LLM endpoint. Overrides `config.dgpt.base_url`.                |
+| `OPENAI_API_KEY`, `OPENAI_MODEL` | Optional LLM summarizer (OpenAI-compatible chat completions). Both required to enable. Override `config.openai.api_key` / `config.openai.model`. |
+| `OPENAI_BASE_URL`             | Optional override for the LLM endpoint (point at any OpenAI-compatible API). Overrides `config.openai.base_url`. |
 | `XDG_CACHE_HOME`              | Standard XDG var; cache path base (see below).                                           |
 | `NO_COLOR`                    | Standard cross-tool var; disables ANSI colors when set to any non-empty value.           |
 

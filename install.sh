@@ -33,7 +33,7 @@ main() {
     printf "    $ wcaw src/auth/login.ts:validateToken\n"
     printf "\n"
     printf "  Optional: set GITHUB_TOKEN for richer PR/issue enrichment, and\n"
-    printf "  DGPT_API_KEY + DGPT_MODEL to enable LLM commit summaries.\n"
+    printf "  OPENAI_API_KEY + OPENAI_MODEL to enable LLM commit summaries.\n"
     printf "\n"
 }
 
