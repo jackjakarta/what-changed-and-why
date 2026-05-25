@@ -109,7 +109,7 @@ func main() {
 
 	groups, repoOwner, repoName := enrichOrFallback(commits, resolved.Repo(), c, cfg.GitHubToken)
 	decorateTestFiles(resolved.Repo(), groups, resolved.RelPath)
-	decorateSummaries(context.Background(), groups, sym, c, repoOwner, repoName, cfg.DGPT)
+	decorateSummaries(context.Background(), groups, sym, c, repoOwner, repoName, cfg.OpenAI)
 
 	owner, hasOwner := history.EffectiveOwner(commits)
 	in := render.Input{
@@ -207,11 +207,11 @@ func enrichOrFallback(commits []history.Commit, repo *git.Repository, c *cache.C
 // read-through cache so repeat invocations against the same PR cost zero LLM
 // calls. Missing credentials or repeated upstream failures degrade silently
 // — Summary stays empty and the renderer skips the bullet.
-func decorateSummaries(ctx context.Context, groups []forge.Group, sym locator.Symbol, c *cache.Cache, owner, repo string, dgpt config.DGPTConfig) {
+func decorateSummaries(ctx context.Context, groups []forge.Group, sym locator.Symbol, c *cache.Cache, owner, repo string, oai config.OpenAIConfig) {
 	s := summarize.New(
-		config.EnvOr("DGPT_MODEL", dgpt.Model),
-		config.EnvOr("DGPT_API_KEY", dgpt.APIKey),
-		config.EnvOr("DGPT_BASE_URL", dgpt.BaseURL),
+		config.EnvOr("OPENAI_MODEL", oai.Model),
+		config.EnvOr("OPENAI_API_KEY", oai.APIKey),
+		config.EnvOr("OPENAI_BASE_URL", oai.BaseURL),
 	)
 	if s == nil {
 		return

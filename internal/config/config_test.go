@@ -21,7 +21,7 @@ func TestLoadFrom_ValidFile(t *testing.T) {
 	path := filepath.Join(dir, "config.json")
 	body := `{
 	  "github_token": "ghp_test",
-	  "dgpt": {
+	  "openai": {
 	    "api_key": "sk-test",
 	    "model": "gpt-4o-mini",
 	    "base_url": "https://example.test/v1"
@@ -37,14 +37,14 @@ func TestLoadFrom_ValidFile(t *testing.T) {
 	if c.GitHubToken != "ghp_test" {
 		t.Errorf("GitHubToken = %q, want %q", c.GitHubToken, "ghp_test")
 	}
-	if c.DGPT.APIKey != "sk-test" {
-		t.Errorf("DGPT.APIKey = %q, want %q", c.DGPT.APIKey, "sk-test")
+	if c.OpenAI.APIKey != "sk-test" {
+		t.Errorf("OpenAI.APIKey = %q, want %q", c.OpenAI.APIKey, "sk-test")
 	}
-	if c.DGPT.Model != "gpt-4o-mini" {
-		t.Errorf("DGPT.Model = %q, want %q", c.DGPT.Model, "gpt-4o-mini")
+	if c.OpenAI.Model != "gpt-4o-mini" {
+		t.Errorf("OpenAI.Model = %q, want %q", c.OpenAI.Model, "gpt-4o-mini")
 	}
-	if c.DGPT.BaseURL != "https://example.test/v1" {
-		t.Errorf("DGPT.BaseURL = %q, want %q", c.DGPT.BaseURL, "https://example.test/v1")
+	if c.OpenAI.BaseURL != "https://example.test/v1" {
+		t.Errorf("OpenAI.BaseURL = %q, want %q", c.OpenAI.BaseURL, "https://example.test/v1")
 	}
 }
 

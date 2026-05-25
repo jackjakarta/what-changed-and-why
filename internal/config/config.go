@@ -21,14 +21,14 @@ import (
 // Config holds the wcaw-specific settings that may live in config.json. All
 // fields are optional; the zero value is a valid, empty configuration.
 type Config struct {
-	GitHubToken string     `json:"github_token,omitempty"`
-	DGPT        DGPTConfig `json:"dgpt,omitempty"`
+	GitHubToken string       `json:"github_token,omitempty"`
+	OpenAI      OpenAIConfig `json:"openai,omitempty"`
 }
 
-// DGPTConfig groups the OpenAI-compatible LLM summarizer credentials. APIKey
+// OpenAIConfig groups the OpenAI-compatible LLM summarizer credentials. APIKey
 // and Model are both required to enable the summarizer at runtime; BaseURL is
-// an optional endpoint override.
-type DGPTConfig struct {
+// an optional endpoint override for non-OpenAI compatible endpoints.
+type OpenAIConfig struct {
 	APIKey  string `json:"api_key,omitempty"`
 	Model   string `json:"model,omitempty"`
 	BaseURL string `json:"base_url,omitempty"`
