@@ -139,11 +139,11 @@ func stripWrappingQuotes(s string) string {
 		return s
 	}
 	pairs := map[rune]rune{
-		'"':      '"',
-		'\'':     '\'',
-		'`':      '`',
-		'“':      '”',
-		'‘':      '’',
+		'"':  '"',
+		'\'': '\'',
+		'`':  '`',
+		'“':  '”',
+		'‘':  '’',
 	}
 	runes := []rune(s)
 	close, ok := pairs[runes[0]]
