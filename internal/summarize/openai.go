@@ -11,7 +11,7 @@ import (
 	"github.com/openai/openai-go/shared"
 )
 
-// callTimeout caps a single Summarize call. Phase 8 has no global timeout
+// callTimeout caps a single Summarize call. wcaw has no global timeout
 // surface yet; this keeps a hung LLM from stalling the CLI forever.
 const callTimeout = 30 * time.Second
 

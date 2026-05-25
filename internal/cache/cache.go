@@ -1,4 +1,4 @@
-// Package cache is the Phase 7 persistence layer for wcaw. It backs the
+// Package cache is the persistence layer for wcaw. It backs the
 // expensive, deterministic computations — per-commit tree-sitter parses and
 // per-commit forge (GitHub) lookups — with a bbolt key/value store on disk so
 // repeat invocations against the same repo amortise their cost.
@@ -127,9 +127,9 @@ func initBuckets(db *bolt.DB) error {
 
 // DefaultPath returns the path wcaw uses when no explicit location is given:
 // $XDG_CACHE_HOME/wcaw/cache.db when XDG_CACHE_HOME is set, otherwise
-// ~/.cache/wcaw/cache.db. macOS users get the same XDG-style path; matching
-// SPEC §5 Phase 7 is more valuable than honoring darwin's ~/Library/Caches
-// convention here.
+// ~/.cache/wcaw/cache.db. macOS users get the same XDG-style path; a single
+// cross-platform cache location is more valuable than honoring darwin's
+// ~/Library/Caches convention here.
 func DefaultPath() (string, error) {
 	if base := os.Getenv("XDG_CACHE_HOME"); base != "" {
 		return filepath.Join(base, "wcaw", "cache.db"), nil

@@ -244,7 +244,7 @@ func enumerate(e SymbolEnumerator, commitSHA, filePath string, blob []byte) ([]l
 //
 // A nil SymbolEnumerator is fine: every AST parse falls through to
 // locator.Enumerate. A non-nil one (e.g. internal/cache.ASTEnumerator) lets
-// Phase 7's cache short-circuit repeat parses of the same (commit, file).
+// the cache short-circuit repeat parses of the same (commit, file).
 func Track(r Resolved, sym locator.Symbol, e SymbolEnumerator) ([]Commit, error) {
 	if r.repo == nil {
 		return nil, errors.New("history.Track: zero Resolved (call Resolve first)")

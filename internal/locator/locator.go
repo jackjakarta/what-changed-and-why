@@ -3,7 +3,7 @@
 // declarations, methods on a class, arrow-function consts, and any of the
 // above wrapped in `export` / `export default`. When the symbol exists more
 // than once (e.g. a method name reused across classes), the first occurrence
-// in source order wins; Phase 3 of SPEC.md is where disambiguation lands.
+// in source order wins (disambiguation is not yet supported).
 package locator
 
 import (

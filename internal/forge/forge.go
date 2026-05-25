@@ -53,9 +53,9 @@ type IssueRef struct {
 
 // Group bundles one PR (or the no-PR bucket, when Pull == nil) with the
 // commits that mapped to it. Commits stay in the input slice's order
-// (newest-first per history.Track). TestFiles is populated by Phase 5's
-// post-grouping decoration and Summary by Phase 8's; GroupCommits itself
-// leaves both zero.
+// (newest-first per history.Track). TestFiles and Summary are populated by
+// post-grouping decoration (see cmd/wcaw); GroupCommits itself leaves both
+// zero.
 type Group struct {
 	Pull      *Pull
 	Commits   []history.Commit

@@ -151,7 +151,7 @@ func stdoutIsTTY() bool {
 
 // decorateTestFiles populates Group.TestFiles for each group via
 // history.CollectTestFiles. On failure we degrade silently (empty test lists)
-// with one stderr warning, matching the Phase 4 forge fallback pattern.
+// with one stderr warning, matching the forge fallback pattern.
 func decorateTestFiles(repo *git.Repository, groups []forge.Group, trackedRel string) {
 	for i := range groups {
 		tests, err := history.CollectTestFiles(repo, groups[i].Commits, trackedRel)

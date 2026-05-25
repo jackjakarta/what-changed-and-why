@@ -1,4 +1,4 @@
-// Package summarize is the Phase 8 LLM layer for wcaw. It produces a single
+// Package summarize is the LLM layer for wcaw. It produces a single
 // short, plain-English line per forge.Group ("why this PR existed") so the
 // timeline reads as a sequence of explained moves rather than a wall of
 // titles.
@@ -49,7 +49,7 @@ type GroupBrief struct {
 	Issues   []forge.IssueRef
 	Commits  []history.Commit
 	// TestFiles is the deduped list of test paths touched by this group's
-	// commits (from history.CollectTestFiles via Phase 5).
+	// commits (from history.CollectTestFiles).
 	TestFiles []string
 	// SymbolName / SymbolKind identify the tracked symbol so the LLM can
 	// ground its summary on it (e.g. "what did this PR do to validateToken").
@@ -83,7 +83,7 @@ func BuildBrief(g forge.Group, sym locator.Symbol) GroupBrief {
 // Degradation: a single Summarize error leaves that group's Summary empty and
 // emits one stderr line; after three consecutive errors the remaining groups
 // are skipped (no further LLM calls) with one final stderr line. This is the
-// same shape as the Phase 4 forge fallback, tuned tighter because each call
+// same shape as the forge fallback, tuned tighter because each call
 // costs real money.
 func DecorateGroups(ctx context.Context, s Summarizer, groups []forge.Group, sym locator.Symbol) {
 	if s == nil {
