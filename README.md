@@ -106,3 +106,11 @@ go vet ./... && gofmt -w .
 ## Scope
 
 v1 supports TypeScript (`.ts`) source files and GitHub-hosted repositories.
+
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for build, test, and style conventions.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

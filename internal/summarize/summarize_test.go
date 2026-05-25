@@ -136,7 +136,7 @@ func TestPostProcessLengthCap(t *testing.T) {
 type fakeSummarizer struct {
 	calls    int
 	err      error
-	errUntil int  // first errUntil calls error, the rest succeed
+	errUntil int // first errUntil calls error, the rest succeed
 	summary  string
 }
 
