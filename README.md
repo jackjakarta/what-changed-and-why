@@ -1,4 +1,7 @@
-# wcaw
+# wcaw | what changed and why
+
+[![Build](https://img.shields.io/github/actions/workflow/status/jackjakarta/what-changed-and-why/release.yml?label=build)](https://github.com/jackjakarta/what-changed-and-why/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#license) 
 
 **What changed and why** — narrate the history of a single TypeScript symbol.
 
