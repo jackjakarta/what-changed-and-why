@@ -85,7 +85,8 @@ func commitChangedPaths(commit *object.Commit) ([]string, error) {
 
 // isTestPath matches the v1 test-file glob set: basename ends in `.test.ts`
 // or `.spec.ts`, or any segment of the path is `__tests__` and the file is a
-// `.ts`. `.tsx` is deliberately excluded (Phase 2 deferred .tsx grammar).
+// `.ts`. `.tsx` is deliberately excluded (the .tsx grammar is not wired up
+// in v1).
 func isTestPath(p string) bool {
 	if p == "" {
 		return false

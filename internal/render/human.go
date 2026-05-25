@@ -80,7 +80,7 @@ func countsForHeader(in Input) (touching, prCount int) {
 // oldest commit whose Class is ClassIntroduced. Zero means "no PR matched the
 // introducing commit" (and we use it to tag the no-PR bucket too).
 //
-// Phase 6 only uses this to decide where to emit the `─ N lines` bullet.
+// Only used to decide where to emit the `─ N lines` bullet.
 func introducingGroupNumber(groupsChrono []forge.Group) int {
 	for _, g := range groupsChrono {
 		for _, c := range g.Commits {
