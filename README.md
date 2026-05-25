@@ -24,6 +24,17 @@ Effective owner: @maria (60% of changes, last touched 14 months ago)
 
 ## Install
 
+Quick install (prebuilt binary, macOS & Linux):
+
+```
+curl -fsSL https://wcaw.jackjakarta.xyz/install.sh | bash
+```
+
+Installs to `/usr/local/bin` (or `~/.local/bin` when sudo isn't available). Override the
+location with `WCAW_INSTALL_DIR`, or pin a version with `WCAW_VERSION`.
+
+From source with Go:
+
 ```
 go install github.com/jackjakarta/what-changed-and-why/cmd/wcaw@latest
 ```
@@ -34,7 +45,7 @@ Or from a clone:
 go build -o wcaw ./cmd/wcaw
 ```
 
-Requires Go 1.26+ and a C toolchain (the tree-sitter binding uses CGO).
+Building from source requires Go 1.26+ and a C toolchain (the tree-sitter binding uses CGO).
 
 ## Usage
 
