@@ -30,7 +30,7 @@ Effective owner: @maria (60% of changes, last touched 14 months ago)
 Quick install (prebuilt binary, macOS & Linux):
 
 ```
-curl -fsSL https://wcaw.jackjakarta.xyz/install.sh | bash
+curl -fsSL https://wcaw.jackjakarta.guru/install.sh | bash
 ```
 
 Installs to `/usr/local/bin` (or `~/.local/bin` when sudo isn't available). Override the

@@ -1,5 +1,5 @@
 #!/bin/sh
-# wcaw installer — curl -fsSL https://wcaw.jackjakarta.xyz/install.sh | bash
+# wcaw installer — curl -fsSL https://wcaw.jackjakarta.guru/install.sh | bash
 #
 # Environment variables:
 #   WCAW_VERSION      — specific version to install (e.g. v0.1.0), default: latest
