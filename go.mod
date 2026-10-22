@@ -2,6 +2,8 @@ module github.com/jackjakarta/what-changed-and-why
 
 go 1.26.3
 
+toolchain go1.27.3
+
 require (
 	github.com/fatih/color v1.19.0
 	github.com/go-git/go-git/v5 v5.19.0
